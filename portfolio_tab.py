@@ -6,6 +6,38 @@ import yfinance as yf
 from datetime import date
 from ticker_manager import get_ticker_data, get_ticker_list
 
+
+
+def get_current_price(symbol):
+    """Fetch current price, first price of the day, and formatted update date for a given ticker symbol"""
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period="1d", interval="1m")
+        
+        # If 1-day data is unavailable, try a 1-month period
+        if hist.empty or "Close" not in hist:
+            hist = ticker.history(period="1mo", interval="1m")
+        
+        if not hist.empty:
+            # Extract the most recent price, first price of the day, and the latest timestamp
+            latest_price = hist["Close"].iloc[-1]
+            first_price_of_day = hist["Close"].iloc[0]
+            update_date = hist.index[-1]  # Use index as date
+            
+            # Format the update_date to remove seconds and timezone
+            formatted_update_date = update_date.strftime('%Y-%m-%d %H:%M')
+            
+            return latest_price, first_price_of_day, formatted_update_date
+        else:
+            return np.nan, np.nan, np.nan
+    except Exception as e:
+        # Log exception for debugging purposes if necessary
+        print(f"Error fetching data for {symbol}: {e}")
+        return np.nan, np.nan, np.nan
+
+
+
+
 def initialize_portfolio():
     """Initialize portfolio in session state if not present"""
     if 'portfolio_df' not in st.session_state:
@@ -20,10 +52,22 @@ def initialize_portfolio():
             date_bought, buy_price, buy_quantity, color, label = transactions[-1]
             date_bought = pd.Timestamp(date_bought)
             
-            current_price = get_current_price(sym)
+            current_price, first_of_day, update_date = get_current_price(sym)
             performance = (
                 (current_price / buy_price - 1.0) * 100.0
                 if pd.notna(current_price) and buy_price != 0
+                else np.nan
+            )
+            
+            perf = (
+                (current_price - buy_price) * buy_quantity
+                if pd.notna(current_price) and buy_price != 0
+                else np.nan
+            )
+            
+            performance_day = (
+                (current_price / first_of_day - 1.0) * 100.0
+                if pd.notna(current_price) and first_of_day != 0
                 else np.nan
             )
             
@@ -34,6 +78,9 @@ def initialize_portfolio():
                 'Quantity': buy_quantity,
                 'Current Price': current_price,
                 'Performance (%)': performance,
+                'Perf': perf,
+                'day (%)': performance_day,
+                'Update date': update_date,
                 'Label' : label,
             })
             colors.append(color)
@@ -44,7 +91,7 @@ def initialize_portfolio():
             portfolio_df['Color'] = colors  # Add color column
         else:
             portfolio_df = pd.DataFrame(
-                columns=['Ticker', 'Bought Date', 'Buy Price', 'Quantity', 'Current Price', 'Performance (%)', 'Color', 'Label']
+                columns=['Ticker', 'Bought Date', 'Buy Price', 'Quantity', 'Current Price', 'Performance (%)', "Perf", 'day (%)', 'Update date', 'Color', 'Label']
             )
         
         st.session_state.portfolio_df = portfolio_df
@@ -59,20 +106,7 @@ def add_portfolio_entry(new_data):
         pd.DataFrame([new_data])
     ], ignore_index=True)
 
-def get_current_price(symbol):
-    """Fetch current price for a given ticker symbol"""
-    try:
-        ticker = yf.Ticker(symbol)
-        current_info = ticker.info
-        if "regularMarketPrice" in current_info and current_info["regularMarketPrice"] is not None:
-            return current_info["regularMarketPrice"]
-        
-        hist = ticker.history(period="1d", interval="1m")
-        if "Close" not in hist or hist.empty:
-             hist = ticker.history(period="1mo", interval="1m")
-        return hist["Close"].values[-1] if not hist.empty else np.nan
-    except:
-        return np.nan
+
 
 def show_portfolio():
     """Display the portfolio overview with editing capabilities"""
@@ -100,9 +134,19 @@ def show_portfolio():
     
     if st.button("Add Position"):
         if new_ticker and new_price > 0 and new_quantity > 0:
-            current_price = get_current_price(new_ticker)
+            current_price, first_of_day, update_date = get_current_price(sym)
             performance = ((current_price / new_price - 1.0) * 100.0) if pd.notna(current_price) and new_price != 0 else np.nan
+            performance_day = (
+                (current_price / first_of_day - 1.0) * 100.0
+                if pd.notna(current_price) and first_of_day != 0
+                else np.nan
+            )
             
+            perf = (
+                (current_price - new_price  ) * new_quantity
+                if pd.notna(current_price) and new_price != 0
+                else np.nan
+            )
             new_data = {
                 'Ticker': new_ticker,
                 'Bought Date': new_date,
@@ -110,6 +154,9 @@ def show_portfolio():
                 'Quantity': new_quantity,
                 'Current Price': current_price,
                 'Performance (%)': performance,
+                'Perf': perf,
+                'day (%)': performance_day,
+                'Update date': update_date,
                 'Label' : Label,
                 'Color': new_color
             }
@@ -128,13 +175,26 @@ def show_portfolio():
         def update_prices():
             df = st.session_state.portfolio_df.copy()
             for idx, row in df.iterrows():
-                current_price = get_current_price(row['Ticker'])
+                current_price, first_of_day, update_date = get_current_price(row['Ticker'])
                 df.at[idx, 'Current Price'] = current_price
                 df.at[idx, 'Performance (%)'] = (
                     (current_price / row['Buy Price'] - 1.0) * 100.0
                     if pd.notna(current_price) and row['Buy Price'] != 0
                     else np.nan
                 )
+                df.at[idx, 'Perf'] = (
+                    (current_price - row["Buy Price"]) * row['Quantity']
+                    if pd.notna(current_price) and row['Buy Price'] != 0
+                    else np.nan
+                )
+                df.at[idx, 'day (%)'] = (
+                    (current_price / first_of_day - 1.0) * 100.0
+                    if pd.notna(current_price) and first_of_day != 0
+                    else np.nan
+                )
+                df.at[idx, 'Update date'] = update_date 
+            
+            
             return df
         
         updated_df = update_prices()
@@ -147,7 +207,7 @@ def show_portfolio():
         ##styled_df = updated_df.style
 
 
-        columns_to_keep = ["Ticker", "Bought Date", "Buy Price", "Quantity", "Current Price", "Performance (%)", "Label"]
+        columns_to_keep = ["Ticker", "Bought Date", "Buy Price", "Quantity", "Current Price", "Performance (%)", "Perf", 'day (%)', 'Update date', "Label"]
     
 
         # Apply background color styling
@@ -159,7 +219,7 @@ def show_portfolio():
             updated_df.style
             .apply(style_row, axis=1)
             .set_properties(**{'color': 'black'})
-            .applymap(style_performance, subset=['Performance (%)'])
+            .applymap(style_performance, subset=['Performance (%)',"Perf", 'day (%)'])
         )
 
 
