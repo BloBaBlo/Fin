@@ -495,32 +495,6 @@ def show_portfolio():
         st.info("No data in updated_df to show Ticker Performance chart.")
 
 
-    ###########################################################################
-    # (2) Distribution of Current Prices (Histogram)
-    ###########################################################################
-    """
-    **(2) Distribution of Current Prices (Histogram)**
-    See how current prices of your tickers (for those you hold) are distributed.
-    """
-
-    if not updated_df.empty:
-        price_df = updated_df[['Ticker', 'Current Price']].dropna().copy()
-        
-        st.markdown("**Distribution of Current Prices**")
-        if price_df.empty:
-            st.write("No current prices to show.")
-        else:
-            # For a histogram, we only need the numeric column
-            hist_chart = alt.Chart(price_df).mark_bar().encode(
-                x=alt.X('Current Price:Q', bin=alt.Bin(maxbins=20)),
-                y='count()',
-                tooltip=['count()']
-            ).properties(
-                title="Histogram of Current Prices"
-            )
-            st.altair_chart(hist_chart, use_container_width=True)
-    else:
-        st.info("No data in updated_df to show Current Price histogram.")
 
 
     ###########################################################################
@@ -605,21 +579,29 @@ def show_portfolio():
     **(4) Bubble Chart**: X-axis = Ticker, Y-axis = Perf (%), Circle size = Quantity
     """
     if not updated_df.empty:
-        bubble_df = updated_df[['Ticker','Perf (%)','Quantity']].dropna().copy()
+        # Include both 'Quantity' and 'Current Price' so we can compute position value
+        bubble_df = updated_df[['Ticker','Perf (%)','Quantity','Current Price']].dropna().copy()
+        
         if bubble_df.empty:
             st.write("Not enough data for bubble chart.")
         else:
-            # We might convert Ticker to an ordered categorical to keep X sorted
+            # Round the Perf (%) for a cleaner tooltip
             bubble_df['Perf (%)'] = bubble_df['Perf (%)'].round(2)
+            
+            # Create a new column for bubble size = Quantity * Current Price
+            bubble_df['Position Value'] = bubble_df['Quantity'] * bubble_df['Current Price']
+            
+            # Build the Bubble Chart with Altair
             bubble_chart = alt.Chart(bubble_df).mark_circle().encode(
                 x=alt.X('Ticker', sort=None),
                 y='Perf (%):Q',
-                size='Quantity:Q',
+                size='Position Value:Q',  # Use our new column
                 color='Ticker:N',
-                tooltip=['Ticker','Perf (%)','Quantity']
+                tooltip=['Ticker','Perf (%)','Quantity','Current Price','Position Value']
             ).properties(
-                title="Bubble Chart: Ticker vs Perf (%) [size=Quantity]"
+                title="Bubble Chart: Ticker vs Perf (%) [size = Quantity x Current Price]"
             )
+            
             st.altair_chart(bubble_chart, use_container_width=True)
     else:
         st.info("No data in updated_df to show Bubble Chart.")
@@ -646,3 +628,48 @@ def show_portfolio():
     else:
         st.info("No data in updated_df to show Box Plot.")
 
+    ###########################################################################
+    # (7) Histogram: Distribution of Performance (%)
+    ###########################################################################
+    st.markdown("**(7) Histogram: Distribution of Performance (%)**")
+    if not updated_df.empty:
+        hist_df = updated_df[['Perf (%)']].dropna().copy()
+        hist_df['Perf (%)'] = hist_df['Perf (%)'].round(2)
+        
+        histogram = alt.Chart(hist_df).mark_bar().encode(
+            alt.X('Perf (%):Q', bin=alt.Bin(maxbins=20), title='Performance (%)'),
+            y='count()',
+            tooltip=['count()']
+        ).properties(
+            width=600,
+            height=300,
+            title="Distribution of Performance (%)"
+        )
+        st.altair_chart(histogram, use_container_width=True)
+    else:
+        st.info("No performance data available to display Histogram.")
+        
+    ###########################################################################
+    # (8) Scatter Plot: Quantity vs. Performance (%)
+    ###########################################################################
+    st.markdown("**(8) Scatter Plot: Quantity vs. Performance (%)**")
+    if not updated_df.empty:
+        scatter_df = updated_df[['Ticker', 'Quantity', 'Perf (%)', 'Current Price']].dropna().copy()
+        
+        scatter_plot = alt.Chart(scatter_df).mark_circle(size=60).encode(
+            x=alt.X('Quantity:Q', title='Quantity Held'),
+            y=alt.Y('Perf (%):Q', title='Performance (%)'),
+            color='Ticker:N',
+            tooltip=['Ticker', 'Quantity', 'Perf (%)', 'Current Price']
+        ).properties(
+            width=600,
+            height=400,
+            title="Quantity vs. Performance (%)"
+        ).interactive()
+        
+        st.altair_chart(scatter_plot, use_container_width=True)
+    else:
+        st.info("No data available to display Scatter Plot.")      
+    
+
+    
