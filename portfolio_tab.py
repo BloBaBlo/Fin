@@ -33,7 +33,6 @@ def get_current_price(symbol):
         else:
             return np.nan, np.nan, np.nan
     except Exception as e:
-        # Log exception for debugging purposes if necessary
         print(f"Error fetching data for {symbol}: {e}")
         return np.nan, np.nan, np.nan
 
@@ -57,13 +56,11 @@ def initialize_portfolio():
                 if pd.notna(current_price) and buy_price != 0
                 else np.nan
             )
-            
             perf = (
                 (current_price - buy_price) * buy_quantity
                 if pd.notna(current_price) and buy_price != 0
                 else np.nan
             )
-            
             performance_day = (
                 (current_price / first_of_day - 1.0) * 100.0
                 if pd.notna(current_price) and first_of_day != 0
@@ -76,7 +73,7 @@ def initialize_portfolio():
                 'Buy Price': buy_price,
                 'Quantity': buy_quantity,
                 'Current Price': current_price,
-                'Performance (%)': performance,
+                'Perf (%)': performance,
                 'Perf': perf,
                 'day (%)': performance_day,
                 'Update date': update_date,
@@ -84,7 +81,6 @@ def initialize_portfolio():
             })
             colors.append(color)
 
-        # Create DataFrame with color column
         if portfolio_rows:
             portfolio_df = pd.DataFrame(portfolio_rows)
             portfolio_df['Color'] = colors  # Add color column
@@ -92,7 +88,7 @@ def initialize_portfolio():
             portfolio_df = pd.DataFrame(
                 columns=[
                     'Ticker', 'Bought Date', 'Buy Price', 'Quantity',
-                    'Current Price', 'Performance (%)', "Perf", 'day (%)',
+                    'Current Price', 'Perf (%)', "Perf", 'day (%)',
                     'Update date', 'Color', 'Label'
                 ]
             )
@@ -159,7 +155,7 @@ def show_portfolio():
                 'Buy Price': new_price,
                 'Quantity': new_quantity,
                 'Current Price': current_price,
-                'Performance (%)': performance,
+                'Perf (%)': performance,
                 'Perf': perf,
                 'day (%)': performance_day,
                 'Update date': update_date,
@@ -183,7 +179,7 @@ def show_portfolio():
             for idx, row in df.iterrows():
                 current_price, first_of_day, update_date = get_current_price(row['Ticker'])
                 df.at[idx, 'Current Price'] = current_price
-                df.at[idx, 'Performance (%)'] = (
+                df.at[idx, 'Perf (%)'] = (
                     (current_price / row['Buy Price'] - 1.0) * 100.0
                     if pd.notna(current_price) and row['Buy Price'] != 0
                     else np.nan
@@ -206,7 +202,7 @@ def show_portfolio():
         # 1) Prepare the columns that we want to show:
         columns_to_keep = [
             "Ticker", "Bought Date", "Buy Price", "Quantity", 
-            "Current Price", "Performance (%)", "Perf", 'day (%)', 
+            "Current Price", "Perf (%)", "Perf", 'day (%)', 
             'Update date', "Label"
         ]
         
@@ -244,21 +240,24 @@ def show_portfolio():
             enableValue=True,
             enablePivot=True
         )
-        
-        # Hide the "Color" column from view, but keep it for styling
+
+        # (a) Configure a default column to have a minimum width (so header is always readable)
+        gb.configure_default_column(minWidth=100, resizable=True)
+
+        # (b) Hide the "Color" column from view, but keep it for styling
         gb.configure_column("Color", header_name="Color", hide=True)
 
-        # Pin the "Ticker" column to the left
+        # (c) Pin the "Ticker" column to the left
         gb.configure_column("Ticker", pinned='left')
 
-        # Performance columns with custom cellStyle
-        for c in ["Performance (%)", "Perf", "day (%)"]:
+        # (d) Performance columns with custom cellStyle
+        for c in ["Perf (%)", "Perf", "day (%)"]:
             gb.configure_column(c, cellStyle=performance_cell_style_code)
 
         # Build final GridOptions
         grid_options = gb.build()
 
-        # Attach the row style function
+        # Attach the row style function for row background color
         grid_options["getRowStyle"] = row_style_code
 
         # 6) Render the table using AgGrid
@@ -267,9 +266,9 @@ def show_portfolio():
             gridOptions=grid_options,
             data_return_mode=DataReturnMode.AS_INPUT,
             update_mode=GridUpdateMode.NO_UPDATE,
-            fit_columns_on_grid_load=True,
-            allow_unsafe_jscode=True,  # needed to allow JsCode
-            theme="alpine",  # or 'streamlit', 'balham', etc.
+            fit_columns_on_grid_load=False,  # do NOT auto-fit, so we can see minWidth
+            allow_unsafe_jscode=True,        # needed to allow JsCode
+            theme="alpine",                  # or 'streamlit', 'balham', etc.
             height=400
         )
 
