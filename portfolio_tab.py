@@ -1,12 +1,15 @@
 # portfolio_tab.py
+
 import streamlit as st
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import date
-from ticker_manager import get_ticker_data, get_ticker_list
+from ticker_manager import get_ticker_data
 
-
+# Make sure to install: pip install streamlit-aggrid
+from st_aggrid import GridOptionsBuilder, AgGrid, DataReturnMode, GridUpdateMode
+from st_aggrid import JsCode
 
 def get_current_price(symbol):
     """Fetch current price, first price of the day, and formatted update date for a given ticker symbol"""
@@ -26,7 +29,6 @@ def get_current_price(symbol):
             
             # Format the update_date to remove seconds and timezone
             formatted_update_date = update_date.strftime('%Y-%m-%d %H:%M')
-            
             return latest_price, first_price_of_day, formatted_update_date
         else:
             return np.nan, np.nan, np.nan
@@ -36,12 +38,9 @@ def get_current_price(symbol):
         return np.nan, np.nan, np.nan
 
 
-
-
 def initialize_portfolio():
     """Initialize portfolio in session state if not present"""
     if 'portfolio_df' not in st.session_state:
-        # Get data from ticker manager
         data = get_ticker_data()
         portfolio_rows = []
         colors = []  # Store the color information
@@ -81,7 +80,7 @@ def initialize_portfolio():
                 'Perf': perf,
                 'day (%)': performance_day,
                 'Update date': update_date,
-                'Label' : label,
+                'Label': label,
             })
             colors.append(color)
 
@@ -91,10 +90,15 @@ def initialize_portfolio():
             portfolio_df['Color'] = colors  # Add color column
         else:
             portfolio_df = pd.DataFrame(
-                columns=['Ticker', 'Bought Date', 'Buy Price', 'Quantity', 'Current Price', 'Performance (%)', "Perf", 'day (%)', 'Update date', 'Color', 'Label']
+                columns=[
+                    'Ticker', 'Bought Date', 'Buy Price', 'Quantity',
+                    'Current Price', 'Performance (%)', "Perf", 'day (%)',
+                    'Update date', 'Color', 'Label'
+                ]
             )
         
         st.session_state.portfolio_df = portfolio_df
+
 
 def add_portfolio_entry(new_data):
     """Add a new entry to the portfolio dataframe"""
@@ -105,7 +109,6 @@ def add_portfolio_entry(new_data):
         st.session_state.portfolio_df,
         pd.DataFrame([new_data])
     ], ignore_index=True)
-
 
 
 def show_portfolio():
@@ -128,22 +131,25 @@ def show_portfolio():
     with col4:
         new_quantity = st.number_input("Quantity", key="new_quantity", min_value=0, step=1)
     with col5:
-        new_quantity = st.text_input("Label", key="new_Label")
+        new_label = st.text_input("Label", key="new_Label")
     
     new_color = st.color_picker("Select Row Color", key="new_color", value="#FFFFFF")
     
     if st.button("Add Position"):
         if new_ticker and new_price > 0 and new_quantity > 0:
-            current_price, first_of_day, update_date = get_current_price(sym)
-            performance = ((current_price / new_price - 1.0) * 100.0) if pd.notna(current_price) and new_price != 0 else np.nan
+            current_price, first_of_day, update_date = get_current_price(new_ticker)
+            performance = (
+                (current_price / new_price - 1.0) * 100.0
+                if pd.notna(current_price) and new_price != 0
+                else np.nan
+            )
             performance_day = (
                 (current_price / first_of_day - 1.0) * 100.0
                 if pd.notna(current_price) and first_of_day != 0
                 else np.nan
             )
-            
             perf = (
-                (current_price - new_price  ) * new_quantity
+                (current_price - new_price) * new_quantity
                 if pd.notna(current_price) and new_price != 0
                 else np.nan
             )
@@ -157,7 +163,7 @@ def show_portfolio():
                 'Perf': perf,
                 'day (%)': performance_day,
                 'Update date': update_date,
-                'Label' : Label,
+                'Label': new_label,
                 'Color': new_color
             }
             add_portfolio_entry(new_data)
@@ -192,53 +198,98 @@ def show_portfolio():
                     if pd.notna(current_price) and first_of_day != 0
                     else np.nan
                 )
-                df.at[idx, 'Update date'] = update_date 
-            
-            
+                df.at[idx, 'Update date'] = update_date
             return df
         
         updated_df = update_prices()
         
-        # Define styling for the Performance (%) column
-        def style_performance(val):
-            color = '#5E0007' if val < 0 else '#1E5400' if val > 0 else 'black'
-            return f'color: {color}'
+        # 1) Prepare the columns that we want to show:
+        columns_to_keep = [
+            "Ticker", "Bought Date", "Buy Price", "Quantity", 
+            "Current Price", "Performance (%)", "Perf", 'day (%)', 
+            'Update date', "Label"
+        ]
+        
+        # 2) We'll make a copy that includes "Color" for row styling
+        display_df = updated_df[columns_to_keep + ["Color"]].copy()
 
-        ##styled_df = updated_df.style
+        # 3) Define a JS function for row background color from "Color"
+        row_style_code = JsCode("""
+        function(params) {
+            if (params.data.Color) {
+                return {
+                    'background-color': params.data.Color,
+                    'color': 'black'
+                };
+            }
+        };
+        """)
 
+        # 4) Define a JS function for performance columns color
+        performance_cell_style_code = JsCode("""
+        function(params) {
+            if (params.value < 0) {
+                return { 'color': '#5E0007' };
+            } else if (params.value > 0) {
+                return { 'color': '#1E5400' };
+            }
+            return { 'color': 'black' };
+        };
+        """)
 
-        columns_to_keep = ["Ticker", "Bought Date", "Buy Price", "Quantity", "Current Price", "Performance (%)", "Perf", 'day (%)', 'Update date', "Label"]
-    
+        # 5) Build the AgGrid options:
+        gb = GridOptionsBuilder.from_dataframe(
+            display_df,
+            enableRowGroup=True,
+            enableValue=True,
+            enablePivot=True
+        )
+        
+        # Hide the "Color" column from view, but keep it for styling
+        gb.configure_column("Color", header_name="Color", hide=True)
 
-        # Apply background color styling
-        def style_row(row):
-            color = row['Color'] if 'Color' in row else "#FFFFFF"
-            return [f'background-color: {color}'] * len(row)
+        # Pin the "Ticker" column to the left
+        gb.configure_column("Ticker", pinned='left')
 
-        styled_df = (
-            updated_df.style
-            .apply(style_row, axis=1)
-            .set_properties(**{'color': 'black'})
-            .applymap(style_performance, subset=['Performance (%)',"Perf", 'day (%)'])
+        # Performance columns with custom cellStyle
+        for c in ["Performance (%)", "Perf", "day (%)"]:
+            gb.configure_column(c, cellStyle=performance_cell_style_code)
+
+        # Build final GridOptions
+        grid_options = gb.build()
+
+        # Attach the row style function
+        grid_options["getRowStyle"] = row_style_code
+
+        # 6) Render the table using AgGrid
+        AgGrid(
+            display_df,
+            gridOptions=grid_options,
+            data_return_mode=DataReturnMode.AS_INPUT,
+            update_mode=GridUpdateMode.NO_UPDATE,
+            fit_columns_on_grid_load=True,
+            allow_unsafe_jscode=True,  # needed to allow JsCode
+            theme="alpine",  # or 'streamlit', 'balham', etc.
+            height=400
         )
 
-
-        styled_df = styled_df.hide(axis="columns", subset=[col for col in updated_df.columns if col not in columns_to_keep])
-
-
-        # Display the styled dataframe
-        st.write(styled_df.to_html(), unsafe_allow_html=True)
-        
         # Add refresh button
         if st.button("Refresh Prices"):
             st.rerun()
 
-        # Display portfolio summary
+        # ===== Portfolio Summary =====
         total_investment = (updated_df['Buy Price'] * updated_df['Quantity']).sum()
         current_value = (updated_df['Current Price'] * updated_df['Quantity']).sum()
-        total_return = ((current_value / total_investment - 1) * 100) if total_investment > 0 else 0
-        
-        total_return_cash = (current_value - total_investment ) if total_investment > 0 else 0
+        total_return = (
+            (current_value / total_investment - 1) * 100
+            if total_investment > 0
+            else 0
+        )
+        total_return_cash = (
+            current_value - total_investment
+            if total_investment > 0
+            else 0
+        )
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -246,9 +297,9 @@ def show_portfolio():
         with col2:
             st.metric("Current Value", f"${current_value:,.2f}")
         with col3:
-            st.metric("Total Return", f"{total_return_cash:.2f} ({total_return:.2f}%)")
+            st.metric("Total Return", f"{total_return_cash:,.2f} ({total_return:.2f}%)")
 
-
+        # Group by Label for summary
         grouped_summary = updated_df.groupby('Label').apply(
             lambda group: pd.Series({
                 'Total Investment': (group['Buy Price'] * group['Quantity']).sum(),
@@ -256,12 +307,15 @@ def show_portfolio():
             })
         ).reset_index()
 
-        # Add Total Return and Total Return Cash
-        grouped_summary['Total Return Cash'] = grouped_summary['Current Value'] - grouped_summary['Total Investment']
+        # Add total return columns
+        grouped_summary['Total Return Cash'] = (
+            grouped_summary['Current Value'] - grouped_summary['Total Investment']
+        )
         grouped_summary['Total Return (%)'] = (
             (grouped_summary['Current Value'] / grouped_summary['Total Investment'] - 1) * 100
-        ).fillna(0)  # Fill NaN for cases where Total Investment is 0
+        ).fillna(0)  # in case of zero total investment
 
         # Display grouped summary
         st.subheader("Portfolio Summary by Label")
-        st.dataframe(grouped_summary)
+        st.dataframe(grouped_summary, use_container_width=True)
+
