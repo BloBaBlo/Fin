@@ -12,7 +12,7 @@ from st_aggrid import GridOptionsBuilder, AgGrid, DataReturnMode, GridUpdateMode
 from st_aggrid import JsCode
 
 def get_current_price(symbol):
-    """Fetch current price, first price of the day, and formatted update date for a given ticker symbol"""
+    """Fetch current price, first price of the day, and formatted update date for a given ticker symbol."""
     try:
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period="1d", interval="1m")
@@ -38,7 +38,7 @@ def get_current_price(symbol):
 
 
 def initialize_portfolio():
-    """Initialize portfolio in session state if not present"""
+    """Initialize portfolio in session state if not present."""
     if 'portfolio_df' not in st.session_state:
         data = get_ticker_data()
         portfolio_rows = []
@@ -69,6 +69,7 @@ def initialize_portfolio():
             
             portfolio_rows.append({
                 'Ticker': sym,
+                # Keep only the date (no time):
                 'Bought Date': date_bought.date(),
                 'Buy Price': buy_price,
                 'Quantity': buy_quantity,
@@ -97,7 +98,7 @@ def initialize_portfolio():
 
 
 def add_portfolio_entry(new_data):
-    """Add a new entry to the portfolio dataframe"""
+    """Add a new entry to the portfolio dataframe."""
     if 'portfolio_df' not in st.session_state:
         initialize_portfolio()
     
@@ -108,7 +109,7 @@ def add_portfolio_entry(new_data):
 
 
 def show_portfolio():
-    """Display the portfolio overview with editing capabilities"""
+    """Display the portfolio overview with editing capabilities."""
     st.subheader("Portfolio Overview")
     
     # Initialize portfolio if needed
@@ -242,7 +243,7 @@ def show_portfolio():
         )
 
         # (a) Configure a default column to have a minimum width (so header is always readable)
-        gb.configure_default_column(minWidth=100, resizable=True)
+        gb.configure_default_column(minWidth=50, resizable=True)
 
         # (b) Hide the "Color" column from view, but keep it for styling
         gb.configure_column("Color", header_name="Color", hide=True)
@@ -253,6 +254,32 @@ def show_portfolio():
         # (d) Performance columns with custom cellStyle
         for c in ["Perf (%)", "Perf", "day (%)"]:
             gb.configure_column(c, cellStyle=performance_cell_style_code)
+
+        # (e) Format the date column "Bought Date" so it displays just YYYY-MM-DD
+        gb.configure_column(
+            "Bought Date",
+            type=["customDateTimeFormat"],
+            custom_format_string='yyyy-MM-dd'
+        )
+
+        # (f) For float columns, show only 2 decimals
+        float_cols = [
+            "Buy Price", "Quantity", "Current Price", 
+            "Perf (%)", "Perf", "day (%)"
+        ]
+        # We'll use valueFormatter to ensure 2 decimals
+        for col_name in float_cols:
+            gb.configure_column(
+                col_name,
+                valueFormatter=JsCode("""
+                function(params) {
+                    if (params.value == null || isNaN(params.value)) {
+                        return '';
+                    }
+                    return Number(params.value).toFixed(2);
+                }
+                """)
+            )
 
         # Build final GridOptions
         grid_options = gb.build()
@@ -266,7 +293,7 @@ def show_portfolio():
             gridOptions=grid_options,
             data_return_mode=DataReturnMode.AS_INPUT,
             update_mode=GridUpdateMode.NO_UPDATE,
-            fit_columns_on_grid_load=False,  # do NOT auto-fit, so we can see minWidth
+            fit_columns_on_grid_load=False,  # do NOT auto-fit, so we see minWidth
             allow_unsafe_jscode=True,        # needed to allow JsCode
             theme="alpine",                  # or 'streamlit', 'balham', etc.
             height=400
