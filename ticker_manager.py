@@ -33,14 +33,14 @@ def load_ticker_data(uploaded_file) -> Optional[Dict]:
             df = pd.read_csv(uploaded_file)
             
             # Ensure the necessary columns exist
-            required_columns = ['Ticker', 'Bought Date', 'Buy Price', 'Quantity']
+            required_columns = ['Ticker', 'Bought Date', 'Buy Price', 'Quantity', 'Color', 'Label']
             if not all(col in df.columns for col in required_columns):
                 st.sidebar.error("Invalid CSV format. Ensure it contains columns: 'Ticker', 'Bought Date', 'Buy Price', 'Quantity'.")
                 return None
             
             # Convert DataFrame to the desired JSON format
             preset_tickers_data = {
-                row['Ticker']: [[row['Bought Date'], row['Buy Price'], row['Quantity']]]
+                row['Ticker']: [[row['Bought Date'], row['Buy Price'], row['Quantity'], row['Color'], row['Label']]]
                 for _, row in df.iterrows()
             }
             

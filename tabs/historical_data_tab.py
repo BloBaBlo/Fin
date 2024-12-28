@@ -39,7 +39,7 @@ def annotate_performance_with_points_and_time(ax, hist_data, points):
         bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray')
     )
 
-    for _, point_price, _  in points:
+    for _, point_price, _, _, _  in points:
         perf_from_buy = (end_price / point_price - 1) * 100
         ax.axhline(y=point_price, color='red', linestyle='--', alpha=0.7)
         
