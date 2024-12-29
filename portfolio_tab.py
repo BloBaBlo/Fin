@@ -192,7 +192,7 @@ def update_prices_and_performance(portfolio_df):
 
     # Renamed 'Perf (%)' to 'Perf_Pct'
     portfolio_df['Perf_Pct'] = ((portfolio_df['Current Price'] / portfolio_df['Buy_Price']) - 1) * 100
-    portfolio_df['Perf'] = (portfolio_df['Current Price'] - portfolio_df['Buy_Price']) * portfolio_df['Quantity']
+
     portfolio_df['day_Pct'] = ((portfolio_df['Current Price'] / portfolio_df['First Price of Day']) - 1) * 100
     portfolio_df['last_Pct'] = ((portfolio_df['Current Price'] / portfolio_df['Second Latest Price']) - 1) * 100
 
@@ -548,7 +548,7 @@ def show_portfolio():
     st.header("📊 Aggregated Portfolio")
     display_columns = [
         "Ticker", "Quantity", "Buy_Price", "Current Price",
-        "Perf_Pct", "Perf", "day_Pct", "last_Pct", "Update date", "Label", "Market Value", "Total Investment", "Return"
+        "Perf_Pct", "day_Pct", "last_Pct", "Update date", "Label", "Market Value", "Total Investment", "Return"
     ]
     display_df = updated_df[display_columns + ["Color"]].copy()
 
@@ -580,11 +580,11 @@ def show_portfolio():
     gb_pf.configure_column("Color", hide=True)
     gb_pf.configure_column("Ticker", pinned='left')
 
-    for col in ["Perf_Pct", "Perf", "day_Pct", "last_Pct", "Return"]:
+    for col in ["Perf_Pct", "day_Pct", "last_Pct", "Return"]:
         gb_pf.configure_column(col, cellStyle=perf_style)
 
     # Format numeric columns
-    float_cols = ["Buy_Price", "Current Price", "Perf_Pct", "Perf", "day_Pct", "last_Pct", "Market Value", "Total Investment", "Return"]
+    float_cols = ["Buy_Price", "Current Price", "Perf_Pct", "day_Pct", "last_Pct", "Market Value", "Total Investment", "Return"]
     for col in float_cols:
         gb_pf.configure_column(
             col,
