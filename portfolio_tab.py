@@ -34,18 +34,25 @@ def get_current_price(symbol):
         
         if not hist.empty:
             # Extract the most recent price, first price of the day, and the latest timestamp
-            latest_price = hist["Close"].iloc[-1]
+            try:
+                latest_price = hist["Close"].iloc[-1]
+            except:
+           	    latest_price = hist["Close"].iloc[0]
+            try:
+                second_latest_price = hist["Close"].iloc[-2]
+            except:
+                second_latest_price = hist["Close"].iloc[0]
             first_price_of_day = hist["Close"].iloc[0]
             update_date = hist.index[-1]  # Use index as date
             
             # Format update_date to remove seconds and timezone
             formatted_update_date = update_date.strftime('%Y-%m-%d %H:%M')
-            return latest_price, first_price_of_day, formatted_update_date
+            return latest_price, second_latest_price, first_price_of_day, formatted_update_date
         else:
-            return np.nan, np.nan, np.nan
+            return np.nan, np.nan, np.nan, np.nan
     except Exception as e:
         print(f"Error fetching data for {symbol}: {e}")
-        return np.nan, np.nan, np.nan
+        return np.nan, np.nan, np.nan, np.nan
 
 
 def initialize_transactions():
@@ -125,6 +132,7 @@ def update_prices_and_performance(portfolio_df):
       - Perf (%)
       - Perf (in $)
       - day (%)
+      - last (%)
       - Update date
     """
     df = portfolio_df.copy()
@@ -132,6 +140,7 @@ def update_prices_and_performance(portfolio_df):
     df['Perf (%)'] = np.nan
     df['Perf'] = np.nan
     df['day (%)'] = np.nan
+    df['last (%)'] = np.nan
     df['Update date'] = np.nan
     
     for idx, row in df.iterrows():
@@ -142,7 +151,7 @@ def update_prices_and_performance(portfolio_df):
         if pd.isna(sym) or sym == '':
             continue
         
-        current_price, first_of_day, update_date = get_current_price(sym)
+        current_price, second_curent, first_of_day, update_date = get_current_price(sym)
         df.at[idx, 'Current Price'] = current_price
         df.at[idx, 'Update date'] = update_date
         
@@ -158,6 +167,11 @@ def update_prices_and_performance(portfolio_df):
             df.at[idx, 'day (%)'] = (current_price / first_of_day - 1.0) * 100.0
         else:
             df.at[idx, 'day (%)'] = np.nan
+            
+        if pd.notna(current_price) and second_curent != 0:
+            df.at[idx, 'last (%)'] = (current_price / second_curent - 1.0) * 100.0
+        else:
+            df.at[idx, 'last (%)'] = np.nan
     
     return df
 
@@ -339,7 +353,7 @@ def show_portfolio():
     # Show the aggregated portfolio
     columns_to_show = [
         "Ticker", "Quantity", "Buy Price", "Current Price",
-        "Perf (%)", "Perf", "day (%)", "Update date", "Label"
+        "Perf (%)", "Perf", "day (%)", "last (%)", "Update date", "Label"
     ]
     display_portfolio = updated_df[columns_to_show + ["Color"]].copy()
 
@@ -370,11 +384,11 @@ def show_portfolio():
     gb_pf.configure_column("Color", hide=True)
     gb_pf.configure_column("Ticker", pinned='left')
 
-    for col in ["Perf (%)", "Perf", "day (%)"]:
+    for col in ["Perf (%)", "Perf", "day (%)", "last (%)"]:
         gb_pf.configure_column(col, cellStyle=performance_cell_style_code)
 
     # Format floats to 2 decimals
-    float_cols = ["Quantity", "Buy Price", "Current Price", "Perf (%)", "Perf", "day (%)"]
+    float_cols = ["Quantity", "Buy Price", "Current Price", "Perf (%)", "Perf", "day (%)", "last (%)"]
     for col in float_cols:
         gb_pf.configure_column(
             col,
@@ -654,7 +668,7 @@ def show_portfolio():
     ###########################################################################
     st.markdown("**(8) Scatter Plot: Quantity vs. Performance (%)**")
     if not updated_df.empty:
-        scatter_df = updated_df[['Ticker', 'Quantity', 'Perf (%)', 'Current Price']].dropna().copy()
+        scatter_df = updated_df[['Ticker', 'Quantity', 'Perf (%)', 'Current Price']].dropna().copy()[updated_df["Quantity"]< 500]
         
         scatter_plot = alt.Chart(scatter_df).mark_circle(size=60).encode(
             x=alt.X('Quantity:Q', title='Quantity Held'),
