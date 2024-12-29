@@ -9,4 +9,5 @@ yfinance==0.2.51
 streamlit-aggrid
 streamlit-autorefresh
 altair
-
+fpdf
+xlsxwriter

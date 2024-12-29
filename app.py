@@ -20,7 +20,9 @@ from tabs import (
 )
 
 
-st.set_page_config(page_title="My App", layout="wide")
+st.set_page_config(page_title="My App",page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded")
 
 st.title("📈 ")
 st.sidebar.title("Settings")
