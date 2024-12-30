@@ -1,5 +1,3 @@
-# portfolio_tab.py
-
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -177,6 +175,16 @@ def fetch_daily_portfolio_value(tickers, quantities, start_date, end_date):
         return daily_sum
     return pd.DataFrame()
 
+# Apply the logic to handle NaN cases
+def fetch_prices_or_default(row):
+    current_prices = get_current_price(row['Ticker'])
+    if all(np.isnan(price) for price in current_prices[:3]):
+        # If all returned prices are NaN, use Buy_Price and today's date
+        return pd.Series([row['Buy_Price']] * 3 + [datetime.today().strftime('%Y-%m-%d')])
+    else:
+        # Use the fetched prices if they're valid
+        return pd.Series(current_prices)
+
 def update_prices_and_performance(portfolio_df):
     """
     Update portfolio DataFrame with current prices and performance metrics.
@@ -186,9 +194,7 @@ def update_prices_and_performance(portfolio_df):
         return portfolio_df
 
     portfolio_df = portfolio_df.copy()
-    portfolio_df[['Current Price', 'Second Latest Price', 'First Price of Day', 'Update date']] = portfolio_df['Ticker'].apply(
-        lambda sym: pd.Series(get_current_price(sym))
-    )
+    portfolio_df[['Current Price', 'Second Latest Price', 'First Price of Day', 'Update date']] = portfolio_df.apply(fetch_prices_or_default, axis=1)
 
     # Renamed 'Perf (%)' to 'Perf_Pct'
     portfolio_df['Perf_Pct'] = ((portfolio_df['Current Price'] / portfolio_df['Buy_Price']) - 1) * 100
@@ -291,7 +297,11 @@ def check_and_trigger_alerts(updated_df, alerts_df):
         condition = alert['Condition']
         threshold = alert['Threshold']
         email = alert['Email']
-        current_perf = updated_df.loc[updated_df['Ticker'] == ticker, 'Perf_Pct'].values[0]
+        current_perf_array = updated_df.loc[updated_df['Ticker'] == ticker, 'Perf_Pct'].values
+        if len(current_perf_array) == 0:
+            continue
+        current_perf = current_perf_array[0]
+        
         if condition == "Above" and current_perf > threshold:
             message = f"🚨 **{ticker}** performance is {current_perf:.2f}%, which is above {threshold}%."
             triggered_alerts.append((message, email))
@@ -314,7 +324,24 @@ def check_and_trigger_alerts(updated_df, alerts_df):
         }
         send_email(subject, body, recipient, smtp_details['from_email'],
                    smtp_details['smtp_server'], smtp_details['smtp_port'],
-                   smtp_details['smtp_user'], smtp_details['smtp_password'])
+                   smtp_details['smtp_user'],
+                   smtp_details['smtp_password'])
+
+# --- NEW CODE HERE ---
+@st.cache_data(ttl=300, show_spinner=True)
+def fetch_ticker_fundamentals(symbol):
+    """
+    Fetch fundamental info for a ticker symbol with caching.
+    Returns a dictionary with keys like 'trailingAnnualDividendYield',
+    'trailingPE', 'forwardPE', etc.
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+        return ticker.info  # Some fields may be missing depending on the ticker
+    except Exception as e:
+        st.warning(f"Could not fetch fundamentals for {symbol}: {e}")
+        return {}
+
 
 ###############################################################################
 #                  2) MAIN SHOW_PORTFOLIO FUNCTION
@@ -375,7 +402,6 @@ def show_portfolio():
     with st.form("Add Transaction Form", clear_on_submit=True):
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
-            # Improved with tooltip for better guidance
             new_ticker = st.text_input("Ticker Symbol", placeholder="e.g., AAPL", help="Enter the stock ticker symbol.").upper()
         with col2:
             new_date = st.date_input("Purchase Date", max_value=date.today(), help="Select the date of purchase.")
@@ -419,7 +445,6 @@ def show_portfolio():
     # 2) Editable Transactions Table
     st.header("📋 All Transactions")
     if not transactions_df.empty:
-        # Define AgGrid options
         gb_trans = GridOptionsBuilder.from_dataframe(transactions_df)
         gb_trans.configure_default_column(editable=True, resizable=True, sortable=True, filter=True)
         
@@ -454,7 +479,6 @@ def show_portfolio():
             transactions_df["Actions"] = ""
         gridOptions_trans = gb_trans.build()
         
-        # Render AgGrid
         grid_response = AgGrid(
             transactions_df,
             gridOptions=gridOptions_trans,
@@ -466,7 +490,6 @@ def show_portfolio():
             height=400
         )
 
-        # Update session state with edited data
         edited_df = pd.DataFrame(grid_response["data"])
         edited_df = edited_df.dropna(subset=['Ticker'])  # Remove rows where Ticker is deleted
         st.session_state.transactions_df = edited_df.drop(columns=['Actions'], errors='ignore').reset_index(drop=True)
@@ -540,7 +563,7 @@ def show_portfolio():
             count = st_autorefresh(interval=refresh_interval * 1000, limit=100000, key="price_autorefresh")
             st.caption(f"Auto-refreshed {count} times so far.")
     if st.button("🔄 Manual Refresh"):
-        st.experimental_rerun()
+        st. rerun()
 
     st.markdown("---")
 
@@ -548,11 +571,11 @@ def show_portfolio():
     st.header("📊 Aggregated Portfolio")
     display_columns = [
         "Ticker", "Quantity", "Buy_Price", "Current Price",
-        "Perf_Pct", "day_Pct", "last_Pct", "Update date", "Label", "Market Value", "Total Investment", "Return"
+        "Perf_Pct", "day_Pct", "last_Pct", "Update date", 
+        "Label", "Market Value", "Total Investment", "Return"
     ]
     display_df = updated_df[display_columns + ["Color"]].copy()
 
-    # Define row styling based on Color
     row_style = JsCode("""
     function(params) {
         if (params.data.Color) {
@@ -562,7 +585,6 @@ def show_portfolio():
     }
     """)
 
-    # Define cell styling for performance metrics
     perf_style = JsCode("""
     function(params) {
         if (params.value < 0) {
@@ -574,7 +596,6 @@ def show_portfolio():
     }
     """)
 
-    # Configure AgGrid for portfolio display
     gb_pf = GridOptionsBuilder.from_dataframe(display_df)
     gb_pf.configure_default_column(resizable=True, sortable=True, filter=True)
     gb_pf.configure_column("Color", hide=True)
@@ -583,7 +604,6 @@ def show_portfolio():
     for col in ["Perf_Pct", "day_Pct", "last_Pct", "Return"]:
         gb_pf.configure_column(col, cellStyle=perf_style)
 
-    # Format numeric columns
     float_cols = ["Buy_Price", "Current Price", "Perf_Pct", "day_Pct", "last_Pct", "Market Value", "Total Investment", "Return"]
     for col in float_cols:
         gb_pf.configure_column(
@@ -599,13 +619,11 @@ def show_portfolio():
             """)
         )
 
-    # Additional feature: Sort by Market Value
     gb_pf.configure_column("Market Value", sort='desc')
 
     gridOptions_pf = gb_pf.build()
     gridOptions_pf["getRowStyle"] = row_style
 
-    # Render AgGrid for portfolio
     AgGrid(
         display_df,
         gridOptions=gridOptions_pf,
@@ -617,15 +635,19 @@ def show_portfolio():
         height=500
     )
 
-    # 6) Portfolio Summary Metrics and Risk Analysis
+    # 6) Portfolio Summary & Risk Metrics
     st.header("📈 Portfolio Summary & Risk Metrics")
-    total_investment = (updated_df['Total Investment']).sum()
-    current_value = (updated_df['Market Value']).sum()
-    total_return_cash = (updated_df['Return']).sum()
+    total_investment = updated_df['Total Investment'].sum()
+    current_value = updated_df['Market Value'].sum()
+    total_return_cash = updated_df['Return'].sum()
     total_return_pct = ((current_value / total_investment - 1) * 100) if total_investment > 0 else 0
 
-    # Risk Metrics
-    # Calculate standard deviation of portfolio
+    # --- NEW: Calculate the Day Return (dollar & percentage) ---
+    day_open_value = (updated_df['First Price of Day'] * updated_df['Quantity']).sum()
+    day_return_cash = ((updated_df['Current Price'] - updated_df['First Price of Day']) * updated_df['Quantity']).sum()
+    day_return_pct = (day_return_cash / day_open_value * 100) if day_open_value > 0 else 0
+
+    # Calculate standard deviation of portfolio (1-year daily returns)
     portfolio_returns = []
     for ticker in updated_df['Ticker']:
         hist = fetch_ticker_history(ticker, period="1y", interval="1d")
@@ -635,37 +657,46 @@ def show_portfolio():
     if portfolio_returns:
         combined_returns = pd.concat(portfolio_returns, axis=1)
         combined_returns.fillna(0, inplace=True)
-        portfolio_std = combined_returns.mean(axis=1).std() * np.sqrt(252)  # Annualized standard deviation
+        portfolio_std = combined_returns.mean(axis=1).std() * np.sqrt(252)
         sharpe_ratio = (combined_returns.mean().mean() * 252) / portfolio_std if portfolio_std != 0 else np.nan
     else:
         portfolio_std = np.nan
         sharpe_ratio = np.nan
 
-    # Additional Risk Metrics: Beta and VaR
-    # Assuming benchmark as S&P 500
+    # Benchmark-based Beta and VaR
     benchmark = fetch_ticker_history("^GSPC", period="1y", interval="1d")
     if not benchmark.empty:
         benchmark_returns = benchmark['Close'].pct_change().dropna()
-        portfolio_returns_combined = combined_returns.mean(axis=1).dropna()
-        benchmark_returns = benchmark_returns.reindex(portfolio_returns_combined.index).dropna()
-        common_index = portfolio_returns_combined.index.intersection(benchmark_returns.index)
-        portfolio_returns_final = portfolio_returns_combined.loc[common_index]
-        benchmark_returns_final = benchmark_returns.loc[common_index]
-        covariance = np.cov(portfolio_returns_final, benchmark_returns_final)[0][1]
-        benchmark_variance = np.var(benchmark_returns_final)
-        beta = covariance / benchmark_variance if benchmark_variance != 0 else np.nan
+        if not portfolio_returns:
+            beta = np.nan
+        else:
+            portfolio_returns_combined = combined_returns.mean(axis=1).dropna()
+            benchmark_returns = benchmark_returns.reindex(portfolio_returns_combined.index).dropna()
+            common_index = portfolio_returns_combined.index.intersection(benchmark_returns.index)
+            portfolio_returns_final = portfolio_returns_combined.loc[common_index]
+            benchmark_returns_final = benchmark_returns.loc[common_index]
+            covariance = np.cov(portfolio_returns_final, benchmark_returns_final)[0][1]
+            benchmark_variance = np.var(benchmark_returns_final)
+            beta = covariance / benchmark_variance if benchmark_variance != 0 else np.nan
     else:
         beta = np.nan
 
-    # Value at Risk (VaR) at 95% confidence
-    VaR = np.percentile(combined_returns.mean(axis=1), 5) * np.sqrt(252) * current_value
+    if portfolio_returns:
+        VaR = np.percentile(combined_returns.mean(axis=1), 5) * np.sqrt(252) * current_value
+    else:
+        VaR = np.nan
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Main summary metrics
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("Total Investment", f"${total_investment:,.2f}")
     col2.metric("Current Value", f"${current_value:,.2f}")
-    col3.metric("Total Return", f"${total_return_cash:,.2f} ({total_return_pct:.2f}%)")
+    col3.metric("Total Return", f"${total_return_cash:,.2f}", f"{total_return_pct:.2f}%")
     col4.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}" if not np.isnan(sharpe_ratio) else "N/A")
     col5.metric("Beta", f"{beta:.2f}" if not np.isnan(beta) else "N/A")
+    col6.metric("Day Return", f"${day_return_cash:,.2f}", f"{day_return_pct:.2f}%")
+
+
+    
 
     st.subheader("📊 Portfolio Risk Metrics")
     risk_col1, risk_col2 = st.columns(2)
@@ -674,21 +705,116 @@ def show_portfolio():
     with risk_col2:
         st.metric("Value at Risk (VaR 95%)", f"${VaR:,.2f}" if not np.isnan(VaR) else "N/A")
 
+    # --- NEW CODE HERE: Additional Portfolio Fundamentals ---
+    '''
+    st.subheader("Additional Portfolio Fundamentals")
+    # Fetch fundamentals for each ticker & compute weighted averages
+    fundamentals_data = []
+    for tkr in updated_df['Ticker']:
+        info = fetch_ticker_fundamentals(tkr)
+        trailing_yield = info.get('trailingAnnualDividendYield', 0.0) or 0.0
+        trailing_pe = info.get('trailingPE', np.nan)
+        forward_pe = info.get('forwardPE', np.nan)
+        fundamentals_data.append({
+            'Ticker': tkr,
+            'trailing_yield': trailing_yield,
+            'trailing_pe': trailing_pe,
+            'forward_pe': forward_pe
+        })
+
+    fundamentals_df = pd.DataFrame(fundamentals_data)
+    merged_fund_df = pd.merge(updated_df, fundamentals_df, on='Ticker', how='left')
+
+    # Weighted Dividend Yield
+    if not merged_fund_df.empty and current_value > 0:
+        weighted_div_yield = (merged_fund_df['Market Value'] * merged_fund_df['trailing_yield']).sum() / current_value
+    else:
+        weighted_div_yield = 0.0
+
+    # Weighted trailing PE
+    valid_pe = merged_fund_df.dropna(subset=['trailing_pe'])
+    if not valid_pe.empty and valid_pe['Market Value'].sum() > 0:
+        weighted_trailing_pe = (valid_pe['Market Value'] * valid_pe['trailing_pe']).sum() / valid_pe['Market Value'].sum()
+    else:
+        weighted_trailing_pe = np.nan
+
+    # Weighted forward PE
+    valid_fpe = merged_fund_df.dropna(subset=['forward_pe'])
+    if not valid_fpe.empty and valid_fpe['Market Value'].sum() > 0:
+        weighted_forward_pe = (valid_fpe['Market Value'] * valid_fpe['forward_pe']).sum() / valid_fpe['Market Value'].sum()
+    else:
+        weighted_forward_pe = np.nan
+
+    # Display these fundamentals
+    fcol1, fcol2, fcol3 = st.columns(3)
+    fcol1.metric("Weighted Div. Yield", f"{weighted_div_yield*100:.2f}%")
+    fcol2.metric("Weighted Trailing P/E", f"{weighted_trailing_pe:.2f}" if not np.isnan(weighted_trailing_pe) else "N/A")
+    fcol3.metric("Weighted Forward P/E", f"{weighted_forward_pe:.2f}" if not np.isnan(weighted_forward_pe) else "N/A")
+    st.write(
+        "These metrics use each position’s **Market Value** as the weight. "
+        "Dividend Yield is pulled from the `'trailingAnnualDividendYield'` field in yfinance."
+    )
+    '''
     # Portfolio Summary by Label
     st.subheader("📊 Summary by Label")
+
+    # 1) Aggregate total investments, current value, and total return (cash) by Label
     grouped_summary = updated_df.groupby('Label').agg(
         Total_Investment=pd.NamedAgg(column='Total Investment', aggfunc='sum'),
         Current_Value=pd.NamedAgg(column='Market Value', aggfunc='sum'),
         Total_Return_Cash=pd.NamedAgg(column='Return', aggfunc='sum')
     ).reset_index()
-    grouped_summary['Total_Return_%'] = ((grouped_summary['Current_Value'] / grouped_summary['Total_Investment']) - 1) * 100
-    st.dataframe(grouped_summary.style.format({
-        'Total_Investment': "${:,.2f}",
-        'Current_Value': "${:,.2f}",
-        'Total_Return_Cash': "${:,.2f}",
-        'Total_Return_%': "{:.2f}%"
-    }), use_container_width=True)
 
+    # 2) Compute total return percentage by Label
+    grouped_summary['Total_Return_%'] = (
+        (grouped_summary['Current_Value'] / grouped_summary['Total_Investment']) - 1
+    ) * 100
+
+    # 3) Compute day return (dollar + %) by Label
+    # Internally uses day_open_value but never displays it
+    grouped_day = updated_df.groupby('Label').apply(lambda g: pd.Series({
+        'Day_Return_Cash': ((g['Current Price'] - g['First Price of Day']) * g['Quantity']).sum(),
+        'Day_Return_Pct': (
+            ((g['Current Price'] - g['First Price of Day']) * g['Quantity']).sum() /
+            ((g['First Price of Day'] * g['Quantity']).sum()) * 100
+        ) if (g['First Price of Day'] * g['Quantity']).sum() != 0 else 0
+    })).reset_index()
+
+    # 4) Merge day-return columns into grouped_summary
+    grouped_summary = pd.merge(grouped_summary, grouped_day, on='Label', how='left')
+
+    # 5) Display the updated grouped_summary in a table (optional)
+    st.dataframe(
+        grouped_summary.style.format({
+            'Total_Investment': "${:,.2f}",
+            'Current_Value': "${:,.2f}",
+            'Total_Return_Cash': "${:,.2f}",
+            'Total_Return_%': "{:.2f}%",
+            'Day_Return_Cash': "${:,.2f}",
+            'Day_Return_Pct': "{:.2f}%"
+        }),
+        use_container_width=True
+    )
+
+    # -----------------------------
+    # st.metric Display of Day Return by Label
+    # -----------------------------
+    st.subheader("Day Return by Label (Arrow-Style)")
+
+    # You can arrange metrics in multiple columns if you wish (e.g., 3 columns)
+    num_cols = 3
+    cols = st.columns(num_cols)
+
+    for i, row in grouped_summary.iterrows():
+        # Decide which column to use
+        col_index = i % num_cols
+        with cols[col_index]:
+            st.metric(
+                label=f"{row['Label']} Day Return",
+                value=f"${row['Day_Return_Cash']:,.2f}",
+                delta=f"{row['Day_Return_Pct']:.2f}%",
+                delta_color="normal"  # 'normal' => green when positive, red when negative
+            )
     st.markdown("---")
 
     # 7) Charts & Visualizations
@@ -700,7 +826,6 @@ def show_portfolio():
         if not grouped_summary.empty:
             chart_data = grouped_summary[['Label', 'Current_Value']].fillna(0)
 
-            # Treemap
             treemap_col1, treemap_col2 = st.columns(2)
             with treemap_col1:
                 st.markdown("**Treemap**")
@@ -715,7 +840,6 @@ def show_portfolio():
                 ).interactive()
                 st.altair_chart(treemap, use_container_width=True)
 
-            # Dynamic Pie Chart with Filtering
             with treemap_col2:
                 st.markdown("**Interactive Pie Chart**")
                 pie_chart = alt.Chart(chart_data).mark_arc().encode(
@@ -753,7 +877,7 @@ def show_portfolio():
     with st.container():
         st.subheader("📈 Portfolio Value Over Time")
         end_date = datetime.today()
-        start_date = end_date - timedelta(days=365)  # Extended to 1 year for better trend analysis
+        start_date = end_date - timedelta(days=365)  # 1 year
         portfolio_value_df = fetch_daily_portfolio_value(
             updated_df['Ticker'].tolist(),
             updated_df['Quantity'].tolist(),
@@ -761,7 +885,6 @@ def show_portfolio():
             end_date=end_date.date()
         )
         if not portfolio_value_df.empty:
-            # Adding moving average for forecasting
             portfolio_value_df['30-Day MA'] = portfolio_value_df['Value'].rolling(window=30).mean()
 
             line_chart = alt.Chart(portfolio_value_df).mark_line(point=True).encode(
@@ -948,11 +1071,9 @@ def show_portfolio():
 
     if not alerts_df.empty:
         st.subheader("📋 Current Alerts")
-        # Define AgGrid options for alerts
         gb_alerts = GridOptionsBuilder.from_dataframe(alerts_df)
         gb_alerts.configure_default_column(editable=False, resizable=True, sortable=True, filter=True)
         
-        # Add Delete button using custom cell renderer
         delete_alert_button = JsCode("""
         class BtnCellRenderer {
             init(params) {
@@ -967,7 +1088,6 @@ def show_portfolio():
                     const confirmDelete = confirm("Are you sure you want to delete this alert?");
                     if (confirmDelete) {
                         params.api.updateRowData({ remove: [params.node.data] });
-                        // Trigger Streamlit to rerun
                         window.location.reload();
                     }
                 });
@@ -983,7 +1103,6 @@ def show_portfolio():
             alerts_df["Actions"] = ""
         gridOptions_alerts = gb_alerts.build()
         
-        # Render AgGrid
         alerts_response = AgGrid(
             alerts_df,
             gridOptions=gridOptions_alerts,
@@ -995,12 +1114,10 @@ def show_portfolio():
             height=200
         )
 
-        # Update session state with edited alerts
         edited_alerts_df = pd.DataFrame(alerts_response["data"])
-        edited_alerts_df = edited_alerts_df.dropna(subset=['Ticker'])  # Remove rows where Alert is deleted
+        edited_alerts_df = edited_alerts_df.dropna(subset=['Ticker'])  
         st.session_state.alerts_df = edited_alerts_df.drop(columns=['Actions'], errors='ignore').reset_index(drop=True)
 
-        # Backup and Restore Alerts
         st.subheader("🔒 Backup and Restore Alerts")
         backup_col_a, backup_col_b = st.columns(2)
         with backup_col_a:
@@ -1018,11 +1135,9 @@ def show_portfolio():
                 if restored_alerts_df is not None:
                     st.session_state.alerts_df = restored_alerts_df
                     st.success("✅ Alerts successfully restored!")
-
     else:
         st.info("No alerts set yet. Configure your first alert above.")
 
-    # Trigger Alerts
     st.subheader("⚠️ Triggered Alerts")
     if not alerts_df.empty:
         check_and_trigger_alerts(updated_df, alerts_df)
@@ -1104,8 +1219,7 @@ def show_portfolio():
                     pdf.cell(200, 10, txt=f"{row['Ticker']}: {row['Perf_Pct']:.2f}%", ln=True)
                 pdf.ln(10)
             
-            # Generate PDF and provide download
-            pdf_data = pdf.output(dest='S').encode('latin1')  # Get PDF as bytes
+            pdf_data = pdf.output(dest='S').encode('latin1')
             st.download_button(
                 label="📥 Download Report",
                 data=pdf_data,
@@ -1115,4 +1229,3 @@ def show_portfolio():
     with report_col2:
         st.info("Click the button to download a PDF report of your portfolio summary and top/bottom performers.")
 
-   
