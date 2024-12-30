@@ -1,0 +1,61 @@
+2024-12-29 17:57:36,654:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 17:57:36,835:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:02:37,004:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:02:37,214:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:05:39,316:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:05:39,516:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:10:40,117:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:10:40,279:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:12:30,044:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:12:30,272:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:27:17,698:ERROR:
+2 Failed downloads:
+2024-12-29 18:27:17,699:ERROR:['0P0001PRAT.F', '0P0000WAJB.F']: YFInvalidPeriodError("%ticker%: Period '5d' is invalid, must be one of ['1mo', '3mo', '6mo', 'ytd', '1y', '2y', '5y', '10y', 'max']")
+2024-12-29 18:27:35,697:ERROR:404 Client Error: Not Found for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary/ESEH.PA?modules=calendarEvents&corsDomain=finance.yahoo.com&formatted=false&symbol=ESEH.PA&crumb=Huzs8xXlfaI
+2024-12-29 18:30:43,078:ERROR:
+2 Failed downloads:
+2024-12-29 18:30:43,080:ERROR:['MWRD.PA', 'WPEA.PA']: YFInvalidPeriodError("%ticker%: Period '2y' is invalid, must be one of ['1d', '5d', '1mo', '3mo', '6mo', '1y', 'ytd', 'max']")
+2024-12-29 18:30:45,066:ERROR:
+2 Failed downloads:
+2024-12-29 18:30:45,067:ERROR:['0P0001PRAT.F', '0P0000WAJB.F']: YFPricesMissingError('$%ticker%: possibly delisted; no price data found  (period=1d)')
+2024-12-29 18:42:17,794:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:42:17,956:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:48:43,363:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:48:43,583:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:50:14,333:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:50:14,472:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:57:17,880:ERROR:0P0000WAJB.F: Period '5d' is invalid, must be one of ['1mo', '3mo', '6mo', 'ytd', '1y', '2y', '5y', '10y', 'max']
+2024-12-29 18:57:18,051:ERROR:0P0001PRAT.F: Period '5d' is invalid, must be one of ['1mo', '3mo', '6mo', 'ytd', '1y', '2y', '5y', '10y', 'max']
+2024-12-29 18:58:25,667:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 18:58:25,841:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 19:02:48,238:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 19:02:48,391:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 20:57:41,795:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 20:57:42,157:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-29 21:08:31,696:ERROR:404 Client Error: Not Found for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary/ESEH.PA?modules=calendarEvents&corsDomain=finance.yahoo.com&formatted=false&symbol=ESEH.PA&crumb=Ncq5chCIh4P
+2024-12-29 21:09:24,424:ERROR:404 Client Error: Not Found for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary/ESEH.PA?modules=calendarEvents&corsDomain=finance.yahoo.com&formatted=false&symbol=ESEH.PA&crumb=Ncq5chCIh4P
+2024-12-29 21:16:14,446:ERROR:404 Client Error: Not Found for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary/ESEH.PA?modules=calendarEvents&corsDomain=finance.yahoo.com&formatted=false&symbol=ESEH.PA&crumb=Ncq5chCIh4P
+2024-12-29 21:23:34,497:ERROR:404 Client Error: Not Found for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary/ESEH.PA?modules=calendarEvents&corsDomain=finance.yahoo.com&formatted=false&symbol=ESEH.PA&crumb=Ncq5chCIh4P
+2024-12-29 21:23:35,283:ERROR:404 Client Error: Not Found for url: https://query2.finance.yahoo.com/v10/finance/quoteSummary//ESEH.PA?modules=institutionOwnership%2CfundOwnership%2CmajorDirectHolders%2CmajorHoldersBreakdown%2CinsiderTransactions%2CinsiderHolders%2CnetSharePurchaseActivity&corsDomain=finance.yahoo.com&formatted=false&crumb=Ncq5chCIh4P
+2024-12-30 09:39:39,239:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:39:39,392:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:39:42,341:ERROR:$IS3K.DE: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:39:53,453:ERROR:$IS3K.DE: possibly delisted; no price data found  (period=1mo) (Yahoo error = "1m data not available for startTime=1732869593 and endTime=1735547993. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")
+2024-12-30 09:48:59,122:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:48:59,265:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:54:19,055:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:54:19,370:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:59:42,911:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 09:59:43,076:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:05:47,090:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:05:47,307:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:12:15,901:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:12:16,054:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:18:04,206:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:18:04,344:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:23:28,932:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:23:29,074:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:28:51,060:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:28:51,203:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:34:14,281:ERROR:$0P0000WAJB.F: possibly delisted; no price data found  (period=1d)
+2024-12-30 10:34:14,427:ERROR:$0P0001PRAT.F: possibly delisted; no price data found  (period=1d)

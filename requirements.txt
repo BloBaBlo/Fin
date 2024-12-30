@@ -4,7 +4,7 @@ numpy==2.2.1
 pandas==2.2.3
 pandas_ta==0.3.14b0
 scipy==1.14.1
-streamlit==1.40.1
+streamlit
 yfinance==0.2.51
 streamlit-aggrid
 streamlit-autorefresh
