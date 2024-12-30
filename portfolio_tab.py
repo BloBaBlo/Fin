@@ -1014,35 +1014,6 @@ def show_portfolio():
         else:
             st.info("No tickers available for correlation analysis.")
 
-    # 7.I) Candlestick Chart for Selected Ticker
-    with st.container():
-        st.subheader("📉 Candlestick Chart for Selected Ticker")
-        selected_ticker = st.selectbox("Select Ticker", options=updated_df['Ticker'].unique().tolist(), help="Choose a ticker to view its candlestick chart.")
-        if selected_ticker:
-            hist = fetch_ticker_history(selected_ticker, period="3mo", interval="1d")
-            if not hist.empty:
-                hist = hist.reset_index()
-                hist['Date'] = pd.to_datetime(hist['Date'])
-                candlestick = alt.Chart(hist).mark_rule().encode(
-                    x='Date:T',
-                    y='Low:Q',
-                    y2='High:Q',
-                    tooltip=['Date', 'Low', 'High']
-                ) + alt.Chart(hist).mark_bar().encode(
-                    x='Date:T',
-                    y='Open:Q',
-                    y2='Close:Q',
-                    color=alt.condition("datum.Open > datum.Close",
-                                        alt.value("#FF3333"), alt.value("#33AA33")),
-                    tooltip=['Date', 'Open', 'Close']
-                ).properties(
-                    width=700,
-                    height=400,
-                    title=f"Candlestick Chart for {selected_ticker}"
-                )
-                st.altair_chart(candlestick, use_container_width=True)
-            else:
-                st.info(f"No historical data available for {selected_ticker}.")
 
     # 8) Performance Alerts
     st.header("🔔 Performance Alerts")
