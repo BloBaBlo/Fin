@@ -11,3 +11,4 @@ streamlit-autorefresh
 altair
 fpdf
 xlsxwriter
+plotly
