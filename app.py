@@ -13,7 +13,6 @@ from tabs import (
     company_info_tab,
     news_tab,
     analyst_recommendations_tab,
-    dividends_tab,
     analysis_tab,
     search_tab,
 )
@@ -69,12 +68,11 @@ elif input_method == "Search for a Ticker":
 ticker_input = st.session_state.selected_ticker
 
 functions = [
-    "Show Historical Data",
-    "Portfolio", 
     "Show Company Info",
+    "Show Historical Data",
+    "Portfolio",
     "News",
     "Show Analyst Recommendations",
-    "Show Dividends",
     "Analysis & Visualization",
     "Search",
 ]
@@ -101,8 +99,6 @@ elif selected_function == "News":
 elif selected_function == "Show Analyst Recommendations":
     analyst_recommendations_tab.show_analyst_recommendations(ticker_input)
 
-elif selected_function == "Show Dividends":
-    dividends_tab.show_dividends(ticker_input)
 
 
 elif selected_function == "Analysis & Visualization":
