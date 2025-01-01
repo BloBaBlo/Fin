@@ -1,110 +1,158 @@
-# tabs/search_tab.py
 import streamlit as st
 import yfinance as yf
+import matplotlib.pyplot as plt
+import pandas as pd
+
 
 def show_search_page():
-    st.subheader("Search for sector technology / financial-services / consumer-cyclical / healthcare")
-    st.subheader("communication-services / industrials / consumer-defensive / energy")
-    st.subheader("real-estate / basic-materials / utilities")
+    st.title("📊 Sector and Industry Explorer")
 
-    search_inputs = st.sidebar.text_input("Enter a field", value="technology")
-    search_button = st.sidebar.button("Search")
+    st.sidebar.subheader("Search Options")
+    # Define sectors
+    sectors = [
+        "technology", "financial-services", "consumer-cyclical", "healthcare",
+        "communication-services", "industrials", "consumer-defensive", "energy",
+        "real-estate", "basic-materials", "utilities"
+    ]
 
-    st.subheader("Search for Industry")
-    search_inputs2 = st.sidebar.text_input("Enter a field", value="semiconductors")
-    search_button2 = st.sidebar.button("Search 2")
+    # Initialize session state for industries
+    if "indus" not in st.session_state:
+        st.session_state.indus = ["semiconductors"]
 
-    if search_button or search_button2:
-        if search_button:
-            search_input = yf.Sector(search_inputs)
+    # Sector selection
+    sector = st.sidebar.selectbox("Select a Sector:", sectors)
+    if st.sidebar.button("Search Sector"):
+        try:
+            sector_data = yf.Sector(sector)
+            st.session_state.indus = sector_data.industries.index
+        except Exception as e:
+            st.error(f"Error fetching sector data: {e}")
+
+    # Industry selection
+    industry = st.sidebar.selectbox("Select an Industry:", st.session_state.indus)
+    if st.sidebar.button("Search Industry"):
+        try:
+            industry_data = yf.Industry(industry)
+        except Exception as e:
+            st.error(f"Error fetching industry data: {e}")
+            industry_data = None
+
+    # Tabs for organized visualization
+    tabs = st.tabs(["Sector Overview", "Industry Overview",  "ETFs & Funds", "Growth & Performance"])
+
+    # Sector Overview Tab
+    with tabs[0]:
+        st.header("📈 Sector Overview")
+        if 'sector_data' in locals():
+            overview = sector_data.overview
+
+            # Display key metrics
+            st.metric("Market Cap", f"${overview['market_cap']:,}")
+            st.metric("Companies Count", overview["companies_count"])
+            st.metric("Industries Count", overview["industries_count"])
+            st.metric("Employee Count", overview["employee_count"])
+
+            # Description
+            st.write("**Description:**")
+            st.write(overview["description"])
+
+            # Industries visualization
+            st.subheader("Industries in Sector")
+            industries = sector_data.industries
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.bar(industries["name"], industries["market weight"], color="skyblue")
+            plt.xticks(rotation=45, ha="right")
+            plt.title("Industries by Market Weight")
+            st.pyplot(fig)
+
         else:
-            search_input = yf.Industry(search_inputs2)
+            st.write("Search for a sector to view details.")
 
-        key = getattr(search_input, "key", None)
-        if key:
-            st.write("### Key")
-            st.write(key)
+    # Industry Overview Tab
+    with tabs[1]:
+        st.header("📊 Industry Overview")
+        if 'industry_data' in locals():
+            overview = industry_data.overview
 
-        symbol = getattr(search_input, "symbol", None)
-        if symbol:
-            st.write("### symbol")
-            st.write(symbol)
+            # Display key metrics
+            st.metric("Market Cap", f"${overview['market_cap']:,}")
+            st.metric("Companies Count", overview["companies_count"])
 
-        try:
-            tick = search_input.ticker
-            if tick:
-                st.write("### ticker")
-                st.write(tick)
-        except:
-            st.write("No Ticker")
+            # Description
+            st.write("**Description:**")
+            st.write(overview["description"])
 
-        overview = getattr(search_input, "overview", None)
-        if overview:
-            st.write("### overview")
-            st.write(overview)
+            # Top Companies Visualization
+            st.subheader("Top Companies in Industry")
+            top_companies = industry_data.top_companies
+            top_company_names = top_companies["name"][:20]
+            top_company_symbols = top_companies.index[:20]
+            market_weights = top_companies["market weight"][:20]
+            ratings = top_companies["rating"][:20]
 
-        top_companies = getattr(search_input, "top_companies", None)
-        if top_companies is not None:
-            st.write("### top_companies")
-            st.write(top_companies)
+            # Create a bar chart for Top Companies
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bars = ax.barh(top_company_symbols, market_weights, color="skyblue")
+            ax.set_title("Top Companies by Market Weight", fontsize=16)
+            ax.set_xlabel("Market Weight", fontsize=12)
+            ax.set_ylabel("Company Symbols", fontsize=12)
 
-        research_reports = getattr(search_input, "research_reports", None)
-        if research_reports:
-            st.write("### research_reports")
-            st.write(research_reports)
+            # Add annotations for company names and ratings
+            for bar, name, rating in zip(bars, top_company_names, ratings):
+                width = bar.get_width()
+                ax.text(
+                    width + 0.005, bar.get_y() + bar.get_height() / 2,
+                    f"{name} ({rating})",
+                    va="center", fontsize=10
+                )
 
-        try:
-            top_etfs = search_input.top_etfs
-            if top_etfs:
-                st.write("### top_etfs")
-                st.write(top_etfs)
-        except:
-            pass
+            st.pyplot(fig)
+        else:
+            st.write("Search for an industry to view top companies.")
 
-        try:
-            top_mutual_funds = search_input.top_mutual_funds
-            if top_mutual_funds:
-                st.write("### top_mutual_funds")
-                st.write(top_mutual_funds)
-        except:
-            pass
+    # ETFs & Funds Tab
+    with tabs[2]:
+        st.header("💼 ETFs & Mutual Funds")
+        if 'sector_data' in locals():
+            # Top ETFs
+            st.subheader("Top ETFs")
+            for etf, name in sector_data.top_etfs.items():
+                st.markdown(f"- **{etf}**: {name}")
 
-        try:
-            industries = search_input.industries
-            if industries is not None:
-                st.write("### industries")
-                st.write(industries)
-        except:
-            pass
+            # Top Mutual Funds
+            st.subheader("Top Mutual Funds")
+            for fund, name in sector_data.top_mutual_funds.items():
+                st.markdown(f"- **{fund}**: {name if name else 'N/A'}")
+        else:
+            st.write("Search for a sector to view ETFs and funds.")
 
-        try:
-            sector_key = search_input.sector_key
-            if sector_key:
-                st.write("### sector_key")
-                st.write(sector_key)
-        except:
-            pass
+    # Growth & Performance Tab
+    with tabs[3]:
+        st.header("📈 Growth & Performance")
+        if 'industry_data' in locals():
+            # Top Growth Companies
+            st.subheader("Top Growth Companies")
+            top_growth = industry_data.top_growth_companies
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.bar(top_growth["name"], top_growth[" growth estimate"], color="green")
+            plt.xticks(rotation=45, ha="right")
+            plt.title("Top Growth Companies")
+            plt.ylabel("Growth Estimate")
+            st.pyplot(fig)
 
-        try:
-            sector_name = search_input.sector_name
-            if sector_name is not None:
-                st.write("### sector_name")
-                st.write(sector_name)
-        except:
-            pass
+            # Top Performing Companies
+            st.subheader("Top Performing Companies")
+            top_performing = industry_data.top_performing_companies
+            fig, ax = plt.subplots(figsize=(8, 5))
+            ax.bar(top_performing["name"], top_performing["ytd return"], color="purple")
+            plt.xticks(rotation=45, ha="right")
+            plt.title("Top Performing Companies")
+            plt.ylabel("YTD Return")
+            st.pyplot(fig)
+        else:
+            st.write("Search for an industry to view growth and performance data.")
 
-        try:
-            top_performing_companies = search_input.top_performing_companies
-            if top_performing_companies:
-                st.write("### top_performing_companies")
-                st.write(top_performing_companies)
-        except:
-            pass
 
-        try:
-            top_growth_companies = search_input.top_growth_companies
-            if top_growth_companies is not None:
-                st.write("### top_growth_companies")
-                st.write(top_growth_companies)
-        except:
-            pass
+# Run the app
+if __name__ == "__main__":
+    show_search_page()

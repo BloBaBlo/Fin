@@ -6,6 +6,8 @@ import pandas as pd
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from datetime import datetime
+
 
 def show_company_info(ticker_input):
     st.title("Company Information Dashboard")
@@ -401,38 +403,231 @@ def show_company_info(ticker_input):
                 st.warning("No balance sheet data available.")
 
         # --- Tab 3: Calendar ---
+
         with tab_cal:
             st.subheader("Calendar")
             calendar = ticker.calendar
+
             if isinstance(calendar, pd.DataFrame):
-            # If it's already a DataFrame, just display it
+                # If it's already a DataFrame, just display it
                 if not calendar.empty:
-                    st.dataframe(calendar)
+                    # Attempt to format numeric columns, leave others as is
+                    numeric_cols = calendar.select_dtypes(include=['number']).columns
+                    if not numeric_cols.empty:
+                        formatted_calendar = calendar.copy()
+                        formatted_calendar[numeric_cols] = formatted_calendar[numeric_cols].applymap(lambda x: f"{x:,.2f}")
+                        st.dataframe(formatted_calendar)
+                    else:
+                        st.dataframe(calendar)
                 else:
                     st.warning("Calendar DataFrame is empty.")
             elif isinstance(calendar, dict) and calendar:
-                # If it's a non-empty dict, convert to DataFrame
-                calendar_df = pd.DataFrame.from_dict(calendar, orient="index", columns=["Value"])
-                st.dataframe(calendar_df)
-                
-                # Optional: Try to visualize numeric fields
-                numeric_fields = calendar_df["Value"].apply(lambda x: isinstance(x, (int, float)))
-                cal_numeric_df = calendar_df[numeric_fields].reset_index()
-                cal_numeric_df.columns = ["Field", "Value"]
-                
-                if not cal_numeric_df.empty:
-                    fig_cal = px.bar(
-                        cal_numeric_df,
-                        x="Field",
-                        y="Value",
-                        title="Calendar Numeric Data",
-                        text="Value"
-                    )
-                    fig_cal.update_layout(xaxis_title="", yaxis_title="")
-                    fig_cal.update_traces(textposition='outside')
-                    st.plotly_chart(fig_cal, use_container_width=True)
+                # If it's a non-empty dict, process accordingly
+
+                # Separate the data into categories
+                key_dates = {}
+                earnings_estimates = {}
+                revenue_estimates = {}
+                other_info = {}
+
+                for key, value in calendar.items():
+                    if "Date" in key:
+                        key_dates[key] = value
+                    elif "Earnings" in key:
+                        earnings_estimates[key] = value
+                    elif "Revenue" in key:
+                        revenue_estimates[key] = value
+                    else:
+                        other_info[key] = value
+
+                # Display Key Dates
+                st.markdown("### Key Dates")
+                if key_dates:
+                    key_dates_df = pd.DataFrame.from_dict(key_dates, orient='index', columns=['Date'])
+                    key_dates_df.index.name = 'Event'
+                    key_dates_df.reset_index(inplace=True)
+
+                    # Convert dates to string for better display
+                    def format_date(x):
+                        if isinstance(x, list):
+                            return ', '.join([d.strftime('%Y-%m-%d') if isinstance(d, (datetime, pd.Timestamp)) else str(d) for d in x])
+                        elif isinstance(x, (datetime, pd.Timestamp)):
+                            return x.strftime('%Y-%m-%d')
+                        else:
+                            return str(x)
+
+                    key_dates_df['Date'] = key_dates_df['Date'].apply(format_date)
+                    st.table(key_dates_df.style.format({"Date": lambda x: x}))
                 else:
-                    st.info("No numeric calendar data available for plotting.")
+                    st.info("No key dates available.")
+
+                # Display Earnings Estimates
+                st.markdown("### Earnings Estimates")
+                if earnings_estimates:
+                    earnings_df = pd.DataFrame.from_dict(earnings_estimates, orient='index', columns=['Value'])
+                    earnings_df.index.name = 'Metric'
+                    earnings_df.reset_index(inplace=True)
+
+                    # Format numeric values; leave non-numeric as is
+                    def format_earnings(x):
+                        if isinstance(x, (int, float)):
+                            return f"${x:,.2f}"
+                        return x
+
+                    earnings_df['Value'] = earnings_df['Value'].apply(format_earnings)
+                    st.table(earnings_df)
+
+                    # Visualize Earnings Estimates
+                    earnings_plot_df = pd.DataFrame(earnings_estimates, index=[0]).T.reset_index()
+                    earnings_plot_df.columns = ['Metric', 'Value']
+                    # Filter only numeric values
+                    earnings_plot_df = earnings_plot_df[earnings_plot_df['Value'].apply(lambda x: isinstance(x, (int, float)))]
+                    if not earnings_plot_df.empty:
+                        fig_earnings = px.bar(
+                            earnings_plot_df,
+                            x='Metric',
+                            y='Value',
+                            title='Earnings Estimates',
+                            text=earnings_plot_df['Value'].apply(lambda x: f"${x:,.2f}"),
+                            labels={'Value': 'Amount (USD)', 'Metric': 'Estimate'}
+                        )
+                        fig_earnings.update_traces(textposition='outside')
+                        fig_earnings.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
+                        st.plotly_chart(fig_earnings, use_container_width=True)
+                    else:
+                        st.info("No numeric earnings estimates available for plotting.")
+                else:
+                    st.info("No earnings estimates available.")
+
+                # Display Revenue Estimates
+                st.markdown("### Revenue Estimates")
+                if revenue_estimates:
+                    revenue_df = pd.DataFrame.from_dict(revenue_estimates, orient='index', columns=['Value'])
+                    revenue_df.index.name = 'Metric'
+                    revenue_df.reset_index(inplace=True)
+
+                    # Format numeric values; leave non-numeric as is
+                    def format_revenue(x):
+                        if isinstance(x, (int, float)):
+                            return f"${x:,.2f}"
+                        return x
+
+                    revenue_df['Value'] = revenue_df['Value'].apply(format_revenue)
+                    st.table(revenue_df)
+
+                    # Visualize Revenue Estimates
+                    revenue_plot_df = pd.DataFrame(revenue_estimates, index=[0]).T.reset_index()
+                    revenue_plot_df.columns = ['Metric', 'Value']
+                    # Filter only numeric values
+                    revenue_plot_df = revenue_plot_df[revenue_plot_df['Value'].apply(lambda x: isinstance(x, (int, float)))]
+                    if not revenue_plot_df.empty:
+                        fig_revenue = px.bar(
+                            revenue_plot_df,
+                            x='Metric',
+                            y='Value',
+                            title='Revenue Estimates',
+                            text=revenue_plot_df['Value'].apply(lambda x: f"${x:,.0f}"),
+                            labels={'Value': 'Amount (USD)', 'Metric': 'Estimate'}
+                        )
+                        fig_revenue.update_traces(textposition='outside')
+                        fig_revenue.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
+                        st.plotly_chart(fig_revenue, use_container_width=True)
+                    else:
+                        st.info("No numeric revenue estimates available for plotting.")
+                else:
+                    st.info("No revenue estimates available.")
+
+                # Display Other Information
+                if other_info:
+                    st.markdown("### Additional Information")
+                    other_df = pd.DataFrame.from_dict(other_info, orient='index', columns=['Value'])
+                    other_df.index.name = 'Detail'
+                    other_df.reset_index(inplace=True)
+
+                    # Format numeric values; leave non-numeric as is
+                    def format_other(x):
+                        if isinstance(x, (int, float)):
+                            return f"${x:,.2f}"
+                        elif isinstance(x, (datetime, pd.Timestamp)):
+                            return x.strftime('%Y-%m-%d')
+                        return x
+
+                    other_df['Value'] = other_df['Value'].apply(format_other)
+                    st.table(other_df)
+                else:
+                    st.info("No additional calendar information available.")
+
+                # Visualizations
+
+                # Timeline of Key Dates
+                st.markdown("### Timeline of Key Dates")
+                if key_dates:
+                    timeline_events = []
+                    for event, date in key_dates.items():
+                        if isinstance(date, list):
+                            for d in date:
+                                timeline_events.append({'Event': event, 'Date': d})
+                        else:
+                            timeline_events.append({'Event': event, 'Date': date})
+                    timeline_df = pd.DataFrame(timeline_events)
+                    # Ensure 'Date' column is in datetime format
+                    try:
+                        timeline_df['Date'] = pd.to_datetime(timeline_df['Date'])
+                    except Exception as e:
+                        st.error(f"Error converting dates: {e}")
+                        timeline_df['Date'] = pd.to_datetime(timeline_df['Date'], errors='coerce')
+                    timeline_df = timeline_df.dropna(subset=['Date']).sort_values('Date')
+
+                    if not timeline_df.empty:
+                        # Create a scatter plot to represent events on a timeline
+                        fig_timeline = px.scatter(
+                            timeline_df,
+                            x='Date',
+                            y=[1] * len(timeline_df),  # Single y-value for timeline
+                            text='Event',
+                            title='Upcoming Key Dates',
+                            labels={'Date': 'Date', 'y': 'Event'},
+                            hover_data=['Event']
+                        )
+                        fig_timeline.update_traces(mode='markers+text', textposition='top center', marker=dict(size=12))
+                        fig_timeline.update_layout(
+                            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                            xaxis=dict(showgrid=True),
+                            showlegend=False,
+                            height=300
+                        )
+                        st.plotly_chart(fig_timeline, use_container_width=True)
+                    else:
+                        st.info("No valid key dates available for timeline visualization.")
+                else:
+                    st.info("No key dates available for timeline visualization.")
+
+                # Download Calendar Data
+                st.markdown("### Download Calendar Data")
+
+                # Convert the calendar dict to a flat dictionary for download
+                def flatten_calendar(cal_dict):
+                    flattened = {}
+                    for key, value in cal_dict.items():
+                        if isinstance(value, list):
+                            flattened[key] = ', '.join([v.strftime('%Y-%m-%d') if isinstance(v, (datetime, pd.Timestamp)) else str(v) for v in value])
+                        elif isinstance(value, (datetime, pd.Timestamp)):
+                            flattened[key] = value.strftime('%Y-%m-%d')
+                        elif isinstance(value, (int, float)):
+                            flattened[key] = value
+                        else:
+                            flattened[key] = str(value)
+                    return flattened
+
+                flattened_calendar = flatten_calendar(calendar)
+                calendar_download_df = pd.DataFrame(list(flattened_calendar.items()), columns=['Event', 'Value'])
+                csv_calendar = calendar_download_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Calendar Data as CSV",
+                    data=csv_calendar,
+                    file_name='calendar_data.csv',
+                    mime='text/csv',
+                )
 
             else:
                 # If it's neither a DataFrame nor a dict, just show a warning
@@ -442,26 +637,273 @@ def show_company_info(ticker_input):
         with tab_cf:
             st.subheader("Cashflow")
             cashflow = ticker.cashflow
-            if cashflow is not None and not cashflow.empty:
-                st.dataframe(cashflow)
 
-                # Example chart: Operating Cash Flow & Free Cash Flow over time
-                cf_rows = ["Operating Cash Flow", "Free Cash Flow"]
+            if cashflow is not None and not cashflow.empty:
+                # Display the full cashflow dataframe with better formatting
+                st.dataframe(cashflow.style.format("{:,.2f}").applymap(
+                    lambda v: 'background-color: lightgrey' if pd.isnull(v) else ''
+                ))
+
+                # Summary Metrics
+                st.markdown("### Summary Metrics")
+                # Define key metrics to include in the summary
+                summary_rows = [
+                    "Operating Cash Flow", 
+                    "Investing Cash Flow", 
+                    "Financing Cash Flow", 
+                    "Free Cash Flow", 
+                    "Changes In Cash",
+                    "Net Income From Continuing Operations",
+                    "Depreciation And Amortization",
+                    "Deferred Tax"
+                ]
+                existing_summary = cashflow.index.intersection(summary_rows)
+                if not existing_summary.empty:
+                    summary_df = cashflow.loc[existing_summary].T
+                    summary_df = summary_df.rename_axis("Date").reset_index()
+                    summary_df = summary_df.set_index("Date")
+                    st.dataframe(summary_df.style.format("{:,.2f}"))
+                else:
+                    st.warning("No summary metrics available.")
+
+                # Key Cash Flow Items Over Time
+                st.markdown("#### Key Cash Flow Items Over Time")
+                cf_rows = [
+                    "Operating Cash Flow", 
+                    "Free Cash Flow", 
+                    "Investing Cash Flow", 
+                    "Financing Cash Flow",
+                    "Net Income From Continuing Operations",
+                    "Depreciation And Amortization"
+                ]
                 existing_rows = cashflow.index.intersection(cf_rows)
                 if not existing_rows.empty:
-                    st.markdown("#### Key Cash Flow Items Over Time")
                     cf_selected_df = cashflow.loc[existing_rows].T
+                    cf_selected_df.index = pd.to_datetime(cf_selected_df.index)
                     fig_cf = px.line(
                         cf_selected_df, 
                         x=cf_selected_df.index, 
                         y=cf_selected_df.columns,
                         markers=True,
-                        title="Operating Cash Flow & Free Cash Flow"
+                        title="Key Cash Flow Items Over Time"
                     )
-                    fig_cf.update_layout(xaxis_title="Date", yaxis_title="Amount")
+                    fig_cf.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)", hovermode="x unified")
                     st.plotly_chart(fig_cf, use_container_width=True)
+
+                # Detailed Section: Operating, Investing, Financing Cash Flows
+                st.markdown("### Detailed Cash Flow Sections")
+
+                # Operating Cash Flow
+                if "Operating Cash Flow" in cashflow.index:
+                    st.markdown("#### Operating Cash Flow")
+                    op_cf = cashflow.loc["Operating Cash Flow"].dropna()
+                    fig_op_cf = px.bar(
+                        op_cf,
+                        x=op_cf.index,
+                        y=op_cf.values,
+                        labels={'x': 'Date', 'y': 'Operating Cash Flow (USD)'},
+                        title="Operating Cash Flow Over Time",
+                        text_auto=True
+                    )
+                    fig_op_cf.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)")
+                    st.plotly_chart(fig_op_cf, use_container_width=True)
+
+                # Investing Cash Flow
+                if "Investing Cash Flow" in cashflow.index:
+                    st.markdown("#### Investing Cash Flow")
+                    inv_cf = cashflow.loc["Investing Cash Flow"].dropna()
+                    fig_inv_cf = px.bar(
+                        inv_cf,
+                        x=inv_cf.index,
+                        y=inv_cf.values,
+                        labels={'x': 'Date', 'y': 'Investing Cash Flow (USD)'},
+                        title="Investing Cash Flow Over Time",
+                        text_auto=True
+                    )
+                    fig_inv_cf.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)")
+                    st.plotly_chart(fig_inv_cf, use_container_width=True)
+
+                # Financing Cash Flow
+                if "Financing Cash Flow" in cashflow.index:
+                    st.markdown("#### Financing Cash Flow")
+                    fin_cf = cashflow.loc["Financing Cash Flow"].dropna()
+                    fig_fin_cf = px.bar(
+                        fin_cf,
+                        x=fin_cf.index,
+                        y=fin_cf.values,
+                        labels={'x': 'Date', 'y': 'Financing Cash Flow (USD)'},
+                        title="Financing Cash Flow Over Time",
+                        text_auto=True
+                    )
+                    fig_fin_cf.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)")
+                    st.plotly_chart(fig_fin_cf, use_container_width=True)
+
+                # Net Cash Flow
+                if "Changes In Cash" in cashflow.index:
+                    st.markdown("#### Net Cash Flow")
+                    net_cf = cashflow.loc["Changes In Cash"].dropna()
+                    fig_net_cf = px.line(
+                        net_cf,
+                        x=net_cf.index,
+                        y=net_cf.values,
+                        markers=True,
+                        title="Net Cash Flow Over Time"
+                    )
+                    fig_net_cf.update_layout(xaxis_title="Date", yaxis_title="Net Cash Flow (USD)")
+                    st.plotly_chart(fig_net_cf, use_container_width=True)
+
+                # Changes in Working Capital
+                st.markdown("### Changes in Working Capital")
+                working_capital_rows = [
+                    "Change In Working Capital",
+                    "Change In Other Working Capital",
+                    "Change In Payables And Accrued Expense",
+                    "Change In Inventory",
+                    "Change In Receivables"
+                ]
+                existing_wc = cashflow.index.intersection(working_capital_rows)
+                if not existing_wc.empty:
+                    wc_df = cashflow.loc[existing_wc].T
+                    wc_df.index = pd.to_datetime(wc_df.index)
+
+                    # Create individual line charts for each working capital component
+                    for component in existing_wc:
+                        st.markdown(f"#### {component}")
+                        fig_wc = px.line(
+                            wc_df[component],
+                            x=wc_df.index,
+                            y=wc_df[component],
+                            markers=True,
+                            title=f"{component} Over Time"
+                        )
+                        fig_wc.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)")
+                        st.plotly_chart(fig_wc, use_container_width=True)
+
+                    # Optionally, provide a collapsible table for detailed data
+                    with st.expander("View Detailed Working Capital Changes"):
+                        st.dataframe(wc_df.style.format("{:,.2f}"))
+                else:
+                    st.warning("No working capital data available.")
+
+                # Capital Expenditure & Stock-Based Compensation
+                st.markdown("### Capital Expenditure & Stock-Based Compensation")
+                capex = cashflow.loc["Capital Expenditure"].dropna() if "Capital Expenditure" in cashflow.index else pd.Series()
+                sbc = cashflow.loc["Stock Based Compensation"].dropna() if "Stock Based Compensation" in cashflow.index else pd.Series()
+
+                if not capex.empty or not sbc.empty:
+                    fig_capex_sbc = go.Figure()
+
+                    if not capex.empty:
+                        fig_capex_sbc.add_trace(
+                            go.Bar(
+                                x=capex.index,
+                                y=capex.values,
+                                name="Capital Expenditure",
+                                marker_color='indianred',
+                                yaxis='y1'
+                            )
+                        )
+                    if not sbc.empty:
+                        fig_capex_sbc.add_trace(
+                            go.Scatter(
+                                x=sbc.index,
+                                y=sbc.values,
+                                name="Stock-Based Compensation",
+                                mode='lines+markers',
+                                marker=dict(color='blue'),
+                                yaxis='y2'
+                            )
+                        )
+
+                    # Create dual y-axes
+                    fig_capex_sbc.update_layout(
+                        title="Capital Expenditure & Stock-Based Compensation Over Time",
+                        xaxis=dict(title='Date'),
+                        yaxis=dict(
+                            title="Capital Expenditure (USD)",
+                            titlefont=dict(color='indianred'),
+                            tickfont=dict(color='indianred')
+                        ),
+                        yaxis2=dict(
+                            title="Stock-Based Compensation (USD)",
+                            titlefont=dict(color='blue'),
+                            tickfont=dict(color='blue'),
+                            anchor='x',
+                            overlaying='y',
+                            side='right'
+                        ),
+                        legend=dict(x=0.01, y=0.99),
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig_capex_sbc, use_container_width=True)
+
+                    # Provide a collapsible table for detailed data
+                    with st.expander("View Detailed CapEx & SBC Data"):
+                        insights_df = pd.DataFrame({
+                            "Capital Expenditure": capex,
+                            "Stock Based Compensation": sbc
+                        })
+                        st.dataframe(insights_df.style.format("{:,.2f}"))
+                else:
+                    st.warning("No Capital Expenditure or Stock-Based Compensation data available.")
+
+                # Additional Insights: Other Key Metrics
+                st.markdown("### Additional Key Metrics")
+                additional_metrics = [
+                    "Net Other Financing Charges",
+                    "Cash Dividends Paid",
+                    "Common Stock Dividend Paid",
+                    "Net Common Stock Issuance",
+                    "Net Issuance Payments Of Debt",
+                    "Net Short Term Debt Issuance",
+                    "Net Long Term Debt Issuance",
+                    "Long Term Debt Payments",
+                    "Net Other Investing Changes",
+                    "Net Investment Purchase And Sale",
+                    "Sale Of Investment",
+                    "Purchase Of Investment",
+                    "Net Business Purchase And Sale",
+                    "Purchase Of Business",
+                    "Net PPE Purchase And Sale",
+                    "Depreciation And Amortization",
+                    "Net Income From Continuing Operations",
+                    "Deferred Tax",
+                    "Deferred Income Tax"
+                ]
+                existing_additional = cashflow.index.intersection(additional_metrics)
+                if not existing_additional.empty:
+                    additional_df = cashflow.loc[existing_additional].T
+                    additional_df.index = pd.to_datetime(additional_df.index)
+                    st.markdown("#### Additional Cash Flow Items Over Time")
+                    fig_additional = px.line(
+                        additional_df, 
+                        x=additional_df.index, 
+                        y=additional_df.columns,
+                        markers=True,
+                        title="Additional Cash Flow Items Over Time"
+                    )
+                    fig_additional.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)", hovermode="x unified")
+                    st.plotly_chart(fig_additional, use_container_width=True)
+
+                    # Provide a collapsible table for detailed additional metrics
+                    with st.expander("View Detailed Additional Metrics"):
+                        st.dataframe(additional_df.style.format("{:,.2f}"))
+                else:
+                    st.warning("No additional cash flow metrics available.")
+
+                # Download Cashflow Data
+                st.markdown("### Download Cashflow Data")
+                csv = cashflow.to_csv().encode('utf-8')
+                st.download_button(
+                    label="Download Cashflow as CSV",
+                    data=csv,
+                    file_name='cashflow_data.csv',
+                    mime='text/csv',
+                )
+
             else:
                 st.warning("No cashflow data available.")
+
 
         # --- Tab 5: Institutional Holders ---
         with tab_inst_hold:
