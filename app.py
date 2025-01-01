@@ -14,7 +14,6 @@ from tabs import (
     news_tab,
     analyst_recommendations_tab,
     dividends_tab,
-    earnings_tab,
     analysis_tab,
     search_tab,
 )
@@ -76,7 +75,6 @@ functions = [
     "News",
     "Show Analyst Recommendations",
     "Show Dividends",
-    "Show Earnings",
     "Analysis & Visualization",
     "Search",
 ]
@@ -106,8 +104,6 @@ elif selected_function == "Show Analyst Recommendations":
 elif selected_function == "Show Dividends":
     dividends_tab.show_dividends(ticker_input)
 
-elif selected_function == "Show Earnings":
-    earnings_tab.show_earnings(ticker_input)
 
 elif selected_function == "Analysis & Visualization":
     analysis_tab.show_analysis_and_visualization(ticker_input)

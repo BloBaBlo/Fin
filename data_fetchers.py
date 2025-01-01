@@ -5,49 +5,7 @@ import numpy as np
 
 import yfinance as yf
 
-# ----------------------
-# Keep your "bought" dictionary here
-bought = {
-    "ESEH.PA":  [(pd.Timestamp('2024-12-19'), 19.38)],
-    "SXRT.DE":  [(pd.Timestamp('2024-12-19'), 183.2)],
-    "WPEA.PA":  [(pd.Timestamp('2024-12-19'), 5.83)],
-    "EXA1.AS":  [(pd.Timestamp('2024-12-19'), 8.71)],
-    "EFRN.DE":  [(pd.Timestamp('2024-12-19'), 5.15)],
-    "CSSPX.MI":  [(pd.Timestamp('2024-12-19'), 614)], 
-    "MWRD.PA":  [(pd.Timestamp('2024-12-19'), 133.01)], 
-    "0JDT.L":  [(pd.Timestamp('2024-12-19'), 49.2)], 
-    "XONA.DE":  [(pd.Timestamp('2024-12-19'), 102.06)], 
-    "5QQ0.F":  [(pd.Timestamp('2024-12-19'), 0.462)],
-    "EQ":  [(pd.Timestamp('2024-12-19'), 0.763)], 
-    "ALATA.PA":  [(pd.Timestamp('2024-12-19'), 0.1341)], 
-    "OPTN":  [(pd.Timestamp('2024-12-19'), 0.528)], 
-    "4CQA.MU":  [(pd.Timestamp('2024-12-19'), 0.1682)], 
-    "VJF.HM":  [(pd.Timestamp('2024-12-19'), 0.0021)], 
-    "BNE.MU":  [(pd.Timestamp('2024-12-19'), 0.0704)], 
-    "COH.BE":  [(pd.Timestamp('2024-12-19'), 0.0517)], 
-    "B4T0.BE":  [(pd.Timestamp('2024-12-19'), 0.0055)], 
-    "ID4.F":  [(pd.Timestamp('2024-12-19'), 0.0847)],
-    "3KJB.BE":  [(pd.Timestamp('2024-12-19'), 0.536)], 
-    "5LA1.BE":  [(pd.Timestamp('2024-12-19'), 0.623)], 
-    "0IU0.BE":  [(pd.Timestamp('2024-12-19'), 0.0759)], 
-    "D4G.BE":  [(pd.Timestamp('2024-12-19'), 0.0079)], 
-    "ATO.PA":  [(pd.Timestamp('2024-12-19'), 0.0033)], 
-    "IS3Q.DE":  [(pd.Timestamp('2024-12-19'), 68.09)], 
-    "EXI2.DE":  [(pd.Timestamp('2024-12-19'), 92.75)], 
-    "XDWT.DE":  [(pd.Timestamp('2024-12-19'), 93.19)], 
-    "IS3C.DE":  [(pd.Timestamp('2024-12-19'), 67.13)],
-    "DBXJ.DE":  [(pd.Timestamp('2024-12-19'), 77.08)], 
-    "IS3K.DE":  [(pd.Timestamp('2024-12-19'), 82.65)], 
-    "SXRR.DE":  [(pd.Timestamp('2024-12-19'), 4.78)], 
-    "IBCD.DE":  [(pd.Timestamp('2024-12-19'), 96.67)], 
-    "XRP-USD":  [(pd.Timestamp('2024-12-19'), 2.523)], 
-    "SHIB-USD":  [(pd.Timestamp('2024-12-19'), 0.0000304599)], 
-    "XCN18679-USD":  [(pd.Timestamp('2024-12-19'), 0.00271)], 
-    "GRT6719-USD":  [(pd.Timestamp('2024-12-19'), 0.333)], 
-    "WLD-USD":  [(pd.Timestamp('2024-12-19'), 3.867)], 
-    "ETH-USD":  [(pd.Timestamp('2024-12-19'), 3860.44)], 
-    "SOL-USD": [(pd.Timestamp('2024-12-19'), 216.246)], 
-}
+
 
 # ----------------------
 def get_historical_data(ticker_obj, period="1y", interval="1d"):
