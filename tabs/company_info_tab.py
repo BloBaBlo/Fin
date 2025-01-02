@@ -7,6 +7,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from datetime import datetime
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
 
 def show_company_info(ticker_input):
@@ -378,29 +379,351 @@ def show_company_info(ticker_input):
 
         # --- Tab 2: Balance Sheet ---
         with tab_bs:
-            st.subheader("Balance Sheet")
-            balance_sheet = ticker.balance_sheet
-            if balance_sheet is not None and not balance_sheet.empty:
-                st.dataframe(balance_sheet)
+            st.subheader("📊 Balance Sheet")
 
-                # Example: Show a line chart for a few key rows (if they exist)
-                key_rows = ["Total Assets", "Total Liab", "Total Stockholder Equity"]
-                existing_rows = balance_sheet.index.intersection(key_rows)
-                
-                if not existing_rows.empty:
-                    st.markdown("#### Key Items Over Time")
-                    bs_selected_df = balance_sheet.loc[existing_rows].T
-                    fig_bs = px.line(
-                        bs_selected_df, 
-                        x=bs_selected_df.index, 
-                        y=bs_selected_df.columns,
-                        markers=True,
-                        title="Key Balance Sheet Items Over Time"
+            balance_sheet = ticker.balance_sheet
+
+            if balance_sheet is not None and not balance_sheet.empty:
+                # Transpose for better readability
+                bs_display = balance_sheet.transpose()
+                bs_display.index = pd.to_datetime(bs_display.index).strftime('%Y-%m-%d')
+
+                # Styling the DataFrame
+
+                # --- Section: Custom Visualization ---
+                st.markdown("### 🔍 Custom Balance Sheet Visualization")
+
+                # Retrieve all available items
+                all_items = balance_sheet.index.tolist()
+
+                # Define default key items that exist in the current DataFrame
+                key_default_items = ["Total Assets", "Total Debt", "Stockholders Equity"]
+
+                # Ensure default items exist in the options
+                existing_default_items = [item for item in key_default_items if item in all_items]
+
+                selected_items = st.multiselect(
+                    "Select Balance Sheet Items to Visualize",
+                    options=all_items,
+                    default=existing_default_items
+                )
+
+                if selected_items:
+                    bs_custom_df = balance_sheet.loc[selected_items].transpose()
+                    bs_custom_df.index = pd.to_datetime(bs_custom_df.index).strftime('%Y-%m-%d')
+
+                    # Choose visualization type
+                    viz_type = st.selectbox(
+                        "Select Visualization Type",
+                        options=["Line Chart", "Bar Chart", "Area Chart"],
+                        index=0
                     )
-                    fig_bs.update_layout(xaxis_title="Date", yaxis_title="Amount")
-                    st.plotly_chart(fig_bs, use_container_width=True)
+
+                    if viz_type == "Line Chart":
+                        fig_custom = px.line(
+                            bs_custom_df,
+                            x=bs_custom_df.index,
+                            y=bs_custom_df.columns,
+                            markers=True,
+                            title="Selected Balance Sheet Items Over Time",
+                            labels={"value": "Amount (USD)", "index": "Date"}
+                        )
+                    elif viz_type == "Bar Chart":
+                        fig_custom = px.bar(
+                            bs_custom_df,
+                            x=bs_custom_df.index,
+                            y=bs_custom_df.columns,
+                            title="Selected Balance Sheet Items Over Time",
+                            labels={"value": "Amount (USD)", "index": "Date"},
+                            barmode='group'
+                        )
+                    else:  # Area Chart
+                        fig_custom = px.area(
+                            bs_custom_df,
+                            x=bs_custom_df.index,
+                            y=bs_custom_df.columns,
+                            title="Selected Balance Sheet Items Over Time",
+                            labels={"value": "Amount (USD)", "index": "Date"}
+                        )
+
+                    fig_custom.update_layout(xaxis_title="Date", yaxis_title="Amount (USD)")
+                    st.plotly_chart(fig_custom, use_container_width=True)
+
+                st.markdown("---")
+
+                # --- Section: Financial Ratios ---
+                st.markdown("### 📈 Key Financial Ratios")
+
+                    # Function to calculate financial ratios
+                def calculate_financial_ratios(bs):
+                    ratios = pd.DataFrame(index=bs.columns)
+
+                    try:
+                        # Extract necessary items using the provided balance_sheet data
+                        total_assets = bs.loc["Total Assets"]
+                        # Use "Total Liabilities Net Minority Interest" as total liabilities
+                        total_liabilities = bs.loc["Total Liabilities Net Minority Interest"]
+                        total_equity = bs.loc["Stockholders Equity"]
+                        current_assets = bs.loc["Current Assets"]
+                        current_liabilities = bs.loc["Current Liabilities"]
+                        inventory = bs.loc["Inventory"]
+                        cash = bs.loc["Cash And Cash Equivalents"]
+                        long_term_debt = bs.loc["Long Term Debt"]
+                        short_term_debt = bs.loc["Current Debt"]
+
+                        # Calculate Ratios
+                        ratios["Debt to Equity"] = total_liabilities / total_equity
+                        ratios["Current Ratio"] = current_assets / current_liabilities
+                        ratios["Quick Ratio"] = (current_assets - inventory) / current_liabilities
+                        ratios["Debt to Assets"] = total_liabilities / total_assets
+                        ratios["Cash Ratio"] = cash / current_liabilities
+                        ratios["Debt to Capital"] = (long_term_debt + short_term_debt) / (long_term_debt + short_term_debt + total_equity)
+                        ratios["Equity Ratio"] = total_equity / total_assets
+
+                        return ratios
+                    except KeyError as e:
+                        st.error(f"Missing data for ratio calculation: {e}")
+                        return None
+
+                # Calculate the financial ratios
+                ratios_df = calculate_financial_ratios(balance_sheet)
+
+                if ratios_df is not None:
+                    # Transpose for better readability
+                    ratios_display = ratios_df.transpose()
+                    ratios_display = ratios_display.round(2)
+
+                    # Ensure all column names are strings to prevent TypeError
+                    ratios_display.columns = [str(col) for col in ratios_display.columns]
+
+                    # Display Ratios in AgGrid
+                    st.markdown("#### Financial Ratios Table")
+                    gb_ratios = GridOptionsBuilder.from_dataframe(ratios_display)
+                    gb_ratios.configure_pagination(paginationAutoPageSize=True)
+                    gb_ratios.configure_side_bar()
+                    gb_ratios.configure_default_column(enablePivot=True, enableValue=True, enableRowGroup=True)
+                    grid_options_ratios = gb_ratios.build()
+
+                    AgGrid(
+                        ratios_display,
+                        gridOptions=grid_options_ratios,
+                        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                        update_mode=GridUpdateMode.MODEL_CHANGED,
+                        enable_enterprise_modules=True,
+                        height=300,
+                        fit_columns_on_grid_load=True
+                    )
+
+                    # Visualization of Ratios
+                    st.markdown("#### Financial Ratios Over Time")
+
+                    # Select ratios to visualize
+                    available_ratios = ratios_display.index.tolist()
+                    # Define default ratios ensuring they exist in available_ratios
+                    default_ratios = ["Debt to Equity", "Current Ratio", "Quick Ratio"]
+                    existing_default_ratios = [ratio for ratio in default_ratios if ratio in available_ratios]
+
+                    selected_ratios = st.multiselect(
+                        "Select Financial Ratios to Visualize",
+                        options=available_ratios,
+                        default=existing_default_ratios
+                    )
+
+                    if selected_ratios:
+                        ratios_plot_df = ratios_display.loc[selected_ratios].transpose()
+                        # Convert index to string if it's a Timestamp
+                        if isinstance(ratios_plot_df.index[0], pd.Timestamp):
+                            ratios_plot_df.index = ratios_plot_df.index.strftime('%Y-%m-%d')
+                        else:
+                            ratios_plot_df.index = ratios_plot_df.index.astype(str)
+
+                        fig_ratios = px.line(
+                            ratios_plot_df,
+                            x=ratios_plot_df.index,
+                            y=ratios_plot_df.columns,
+                            markers=True,
+                            title="Selected Financial Ratios Over Time",
+                            labels={"value": "Ratio", "index": "Date"}
+                        )
+                        fig_ratios.update_layout(xaxis_title="Date", yaxis_title="Ratio")
+                        st.plotly_chart(fig_ratios, use_container_width=True)
+
+
+                st.markdown("---")
+
+                # --- Section: Detailed Insights ---
+                st.markdown("### 📝 Detailed Insights")
+
+                with st.expander("🔍 View Detailed Balance Sheet Items"):
+                    st.dataframe(bs_display.style.format("${:,.2f}"))
+
+                        # --- Section: Financial Ratios Explanations ---
+                with st.expander("ℹ️ How Are These Ratios Calculated?"):
+                    st.markdown("""
+        ### 📖 **Understanding Key Financial Ratios**
+
+        Financial ratios are essential tools for evaluating a company's financial health, efficiency, and performance. They provide insights into various aspects of a business by analyzing relationships between different items in the financial statements. Below is an explanation of each ratio displayed in the **Key Financial Ratios** section, including their sources from the balance sheet and what they indicate about the company.
+
+        ---
+
+        #### 1. **Debt to Equity Ratio**
+
+        - **Formula**:
+        \[
+        \text{Debt to Equity} = \frac{\text{Total Liabilities Net Minority Interest}}{\text{Stockholders Equity}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Total Liabilities Net Minority Interest`
+        - **Denominator**: `Stockholders Equity`
+        
+        - **Interpretation**:
+        - **Purpose**: Measures the company's financial leverage and indicates the proportion of debt used to finance the company's assets relative to equity.
+        - **Insight**: 
+            - A **higher ratio** suggests that the company is heavily financed by debt, which may imply higher financial risk.
+            - A **lower ratio** indicates a more conservative approach with less reliance on debt.
+
+        ---
+
+        #### 2. **Current Ratio**
+
+        - **Formula**:
+        \[
+        \text{Current Ratio} = \frac{\text{Current Assets}}{\text{Current Liabilities}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Current Assets`
+        - **Denominator**: `Current Liabilities`
+        
+        - **Interpretation**:
+        - **Purpose**: Assesses the company's ability to meet its short-term obligations with its short-term assets.
+        - **Insight**:
+            - A **ratio above 1** indicates that the company has more current assets than current liabilities, suggesting good short-term financial health.
+            - A **ratio below 1** may signal potential liquidity issues.
+
+        ---
+
+        #### 3. **Quick Ratio**
+
+        - **Formula**:
+        \[
+        \text{Quick Ratio} = \frac{\text{Current Assets} - \text{Inventory}}{\text{Current Liabilities}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Current Assets` minus `Inventory`
+        - **Denominator**: `Current Liabilities`
+        
+        - **Interpretation**:
+        - **Purpose**: Evaluates the company's ability to meet its short-term obligations without relying on the sale of inventory.
+        - **Insight**:
+            - A **higher quick ratio** indicates better liquidity and a stronger position to cover liabilities.
+            - A **lower quick ratio** may suggest reliance on inventory sales to meet obligations, which could be risky if inventory is not quickly convertible to cash.
+
+        ---
+
+        #### 4. **Debt to Assets Ratio**
+
+        - **Formula**:
+        \[
+        \text{Debt to Assets} = \frac{\text{Total Liabilities Net Minority Interest}}{\text{Total Assets}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Total Liabilities Net Minority Interest`
+        - **Denominator**: `Total Assets`
+        
+        - **Interpretation**:
+        - **Purpose**: Indicates the proportion of a company's assets that are financed through debt.
+        - **Insight**:
+            - A **higher ratio** signifies greater leverage and higher financial risk.
+            - A **lower ratio** suggests that the company relies more on equity financing, which is generally less risky.
+
+        ---
+
+        #### 5. **Cash Ratio**
+
+        - **Formula**:
+        \[
+        \text{Cash Ratio} = \frac{\text{Cash And Cash Equivalents}}{\text{Current Liabilities}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Cash And Cash Equivalents`
+        - **Denominator**: `Current Liabilities`
+        
+        - **Interpretation**:
+        - **Purpose**: Measures the company's ability to pay off its current liabilities with only its most liquid assets.
+        - **Insight**:
+            - A **higher cash ratio** indicates a strong liquidity position.
+            - A **lower cash ratio** may imply potential challenges in covering short-term obligations without additional financing.
+
+        ---
+
+        #### 6. **Debt to Capital Ratio**
+
+        - **Formula**:
+        \[
+        \text{Debt to Capital} = \frac{\text{Long Term Debt} + \text{Current Debt}}{\text{Long Term Debt} + \text{Current Debt} + \text{Stockholders Equity}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Long Term Debt` + `Current Debt`
+        - **Denominator**: `Long Term Debt` + `Current Debt` + `Stockholders Equity`
+        
+        - **Interpretation**:
+        - **Purpose**: Evaluates the proportion of debt used in the company's capital structure relative to its total capital.
+        - **Insight**:
+            - A **higher ratio** suggests higher financial leverage and potential risk.
+            - A **lower ratio** indicates a more balanced or equity-heavy capital structure, which is generally less risky.
+
+        ---
+
+        #### 7. **Equity Ratio**
+
+        - **Formula**:
+        \[
+        \text{Equity Ratio} = \frac{\text{Stockholders Equity}}{\text{Total Assets}}
+        \]
+        
+        - **Source**:
+        - **Numerator**: `Stockholders Equity`
+        - **Denominator**: `Total Assets`
+        
+        - **Interpretation**:
+        - **Purpose**: Shows the proportion of a company's assets financed by shareholders' equity.
+        - **Insight**:
+            - A **higher equity ratio** indicates greater financial stability and lower reliance on debt.
+            - A **lower equity ratio** suggests higher financial leverage and increased financial risk.
+
+        ---
+
+        ### 🔍 **Why These Ratios Matter**
+
+        - **Financial Health Assessment**: These ratios collectively provide a snapshot of the company's financial stability, liquidity, and leverage.
+        
+        - **Investment Decisions**: Investors use these ratios to determine the risk and potential return of investing in a company.
+        
+        - **Creditworthiness Evaluation**: Lenders assess these ratios to decide whether to extend credit or loans to the company.
+        
+        - **Operational Efficiency**: Management uses these insights to make informed decisions about financing, investing, and operational strategies.
+
+        ---
+
+        ### 📌 **Key Takeaways**
+
+        - **Leverage Ratios** (e.g., Debt to Equity, Debt to Assets) assess the level of debt relative to equity and assets, indicating financial risk.
+        
+        - **Liquidity Ratios** (e.g., Current Ratio, Quick Ratio, Cash Ratio) evaluate the company's ability to meet short-term obligations, reflecting short-term financial health.
+        
+        - **Capital Structure Ratios** (e.g., Debt to Capital, Equity Ratio) analyze how a company finances its overall operations and growth through different sources of funds.
+
+
+
+        """)
             else:
-                st.warning("No balance sheet data available.")
+                st.warning("⚠️ No balance sheet data available.")
 
         # --- Tab 3: Calendar ---
 

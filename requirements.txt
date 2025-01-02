@@ -12,3 +12,5 @@ altair
 fpdf
 xlsxwriter
 plotly
+concurrent
+functools

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from datetime import date, datetime, timedelta
-from ticker_manager import get_ticker_data
+from ticker_manager import get_ticker_data, get_tradegate_data
 
 # st-aggrid for tables
 from st_aggrid import GridOptionsBuilder, AgGrid, DataReturnMode, GridUpdateMode
@@ -29,6 +29,8 @@ from email.mime.multipart import MIMEMultipart
 
 # For Excel export
 import xlsxwriter
+import concurrent.futures
+from functools import partial
 
 ###############################################################################
 #                         1) HELPER FUNCTIONS
@@ -76,11 +78,22 @@ def fetch_ticker_history(symbol, period="1d", interval="1m"):
         st.error(f"Error fetching data for {symbol}: {e}")
         return pd.DataFrame()
 
-def get_current_price(symbol):
+def get_current_price(symbol, ISIN):
     """
     Fetch current price, second latest price, first price of the day,
     and formatted update date for a given ticker symbol.
     """
+    if pd.notna(ISIN) and isinstance(ISIN, str) and ISIN.strip() != "":
+        try: 
+            latest_price,  last_price, first_price_of_day, formatted_update_date = get_tradegate_data(ISIN)
+            if latest_price != None:
+                return float(latest_price), float(last_price), float(first_price_of_day), formatted_update_date
+        except Exception as e:
+            st.error(f"Error fetching Tradegate data for ISIN {ISIN}: {e}")
+            #return np.nan, np.nan, np.nan, np.nan
+    
+
+    
     hist = fetch_ticker_history(symbol)
     if not hist.empty:
         try:
@@ -103,16 +116,18 @@ def initialize_transactions():
     Initialize a transactions DataFrame in session state if not present.
     This DataFrame stores all buy transactions (ticker, date, buy price, quantity, color, label).
     """
+
     if 'transactions_df' not in st.session_state:
         raw_data = get_ticker_data()
         transactions_rows = [
             {
                 'Ticker': sym,
-                'Date': pd.Timestamp(t[0]).date(),
-                'Buy Price': t[1],
-                'Quantity': t[2],
-                'Color': t[3],
-                'Label': t[4]
+                'ISIN': t[0],
+                'Date': pd.Timestamp(t[1]).date(),
+                'Buy Price': t[2],
+                'Quantity': t[3],
+                'Color': t[4],
+                'Label': t[5]
             }
             for sym, transactions in raw_data.items()
             for t in transactions
@@ -120,7 +135,7 @@ def initialize_transactions():
         if transactions_rows:
             transactions_df = pd.DataFrame(transactions_rows)
         else:
-            transactions_df = pd.DataFrame(columns=['Ticker','Date','Buy Price','Quantity','Color','Label'])
+            transactions_df = pd.DataFrame(columns=['Ticker',"ISIN",'Date','Buy Price','Quantity','Color','Label'])
         st.session_state.transactions_df = transactions_df
 
 def aggregate_transactions():
@@ -134,12 +149,13 @@ def aggregate_transactions():
     if df.empty:
         return pd.DataFrame(columns=['Ticker','Quantity','Buy_Price','Color','Label'])
     
-    portfolio = df.groupby('Ticker').agg(
+    portfolio = df.groupby(['Ticker', 'ISIN'], dropna=False).agg(
         Quantity=pd.NamedAgg(column='Quantity', aggfunc='sum'),
         Buy_Price_Sum=pd.NamedAgg(column='Buy Price', aggfunc=lambda x: (x * df.loc[x.index, 'Quantity']).sum()),
         Color=pd.NamedAgg(column='Color', aggfunc='last'),
         Label=pd.NamedAgg(column='Label', aggfunc='last')
     ).reset_index()
+
     
     portfolio['Buy_Price'] = portfolio.apply(
         lambda row: row['Buy_Price_Sum'] / row['Quantity'] if row['Quantity'] != 0 else np.nan,
@@ -177,13 +193,71 @@ def fetch_daily_portfolio_value(tickers, quantities, start_date, end_date):
 
 # Apply the logic to handle NaN cases
 def fetch_prices_or_default(row):
-    current_prices = get_current_price(row['Ticker'])
-    if all(np.isnan(price) for price in current_prices[:3]):
-        # If all returned prices are NaN, use Buy_Price and today's date
-        return pd.Series([row['Buy_Price']] * 3 + [datetime.today().strftime('%Y-%m-%d')])
-    else:
-        # Use the fetched prices if they're valid
-        return pd.Series(current_prices)
+    """
+    Fetches current price, second latest price, first price of day, and update date.
+    
+    Args:
+        row (pd.Series): A row from the portfolio DataFrame.
+    
+    Returns:
+        pd.Series: Series containing 'Current Price', 'Second Latest Price', 'First Price of Day', 'Update date'.
+    """
+    try:
+        current_prices = get_current_price(row['Ticker'], row['ISIN'])
+        
+        # Unpack the fetched prices
+        latest_price, second_latest_price, first_price_of_day, update_date = current_prices
+        
+        # Handle cases where all fetched prices are NaN
+        if all(pd.isna([latest_price, second_latest_price, first_price_of_day])):
+            # Use 'Buy_Price' and today's date
+            return pd.Series({
+                'Current Price': row['Buy Price'],
+                'Second Latest Price': row['Buy Price'],
+                'First Price of Day': row['Buy Price'],
+                'Update date': datetime.today().strftime('%Y-%m-%d')
+            })
+        else:
+            return pd.Series({
+                'Current Price': latest_price,
+                'Second Latest Price': second_latest_price,
+                'First Price of Day': first_price_of_day,
+                'Update date': update_date
+            })
+    except Exception as e:
+        st.error(f"Error processing {row['Ticker']} (ISIN: {row['ISIN']}): {e}")
+        return pd.Series({
+            'Current Price': np.nan,
+            'Second Latest Price': np.nan,
+            'First Price of Day': np.nan,
+            'Update date': np.nan
+        })
+
+
+def parallel_fetch_prices(portfolio_df, max_workers=20):
+    """
+    Parallelizes the fetching of prices using ThreadPoolExecutor.
+    
+    Args:
+        portfolio_df (pd.DataFrame): DataFrame containing portfolio information.
+        max_workers (int): Maximum number of threads to use.
+    
+    Returns:
+        pd.DataFrame: DataFrame with updated price information.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Use partial to fix any additional arguments to fetch_prices_or_default if needed
+        # Here, fetch_prices_or_default takes only the row as an argument
+        results = list(executor.map(fetch_prices_or_default, [row for _, row in portfolio_df.iterrows()]))
+    
+    # Create a DataFrame from the results
+    results_df = pd.DataFrame(results)
+    
+    # Concatenate the results with the original portfolio_df
+    updated_portfolio_df = pd.concat([portfolio_df.reset_index(drop=True), results_df.reset_index(drop=True)], axis=1)
+    
+    return updated_portfolio_df
+
 
 def update_prices_and_performance(portfolio_df):
     """
@@ -194,7 +268,8 @@ def update_prices_and_performance(portfolio_df):
         return portfolio_df
 
     portfolio_df = portfolio_df.copy()
-    portfolio_df[['Current Price', 'Second Latest Price', 'First Price of Day', 'Update date']] = portfolio_df.apply(fetch_prices_or_default, axis=1)
+    
+    portfolio_df = parallel_fetch_prices(portfolio_df, max_workers=8)
 
     # Renamed 'Perf (%)' to 'Perf_Pct'
     portfolio_df['Perf_Pct'] = ((portfolio_df['Current Price'] / portfolio_df['Buy_Price']) - 1) * 100
@@ -226,11 +301,12 @@ def backup_transactions(transactions_df):
     """Backup the transactions DataFrame to a CSV in memory."""
     return transactions_df.to_csv(index=False).encode('utf-8')
 
+
 def restore_transactions(uploaded_file):
     """Restore the transactions DataFrame from an uploaded CSV file."""
     try:
         df = pd.read_csv(uploaded_file)
-        required_columns = {'Ticker','Date','Buy Price','Quantity','Color','Label'}
+        required_columns = {'Ticker', 'ISIN', 'Date', 'Buy Price', 'Quantity', 'Color', 'Label'}
         if not required_columns.issubset(df.columns):
             st.error("Uploaded CSV does not contain the required columns.")
             return None
@@ -239,6 +315,7 @@ def restore_transactions(uploaded_file):
     except Exception as e:
         st.error(f"Error restoring transactions: {e}")
         return None
+
 
 def get_unique_labels():
     """Retrieve unique labels from transactions for dropdowns."""
@@ -254,10 +331,11 @@ def initialize_alerts():
     if 'alerts_df' not in st.session_state:
         st.session_state.alerts_df = pd.DataFrame(columns=['Ticker', 'Condition', 'Threshold', 'Created At', 'Email'])
 
-def add_alert(ticker, condition, threshold, email):
+def add_alert(ticker, ISIN, condition, threshold, email):
     """Add a new alert to the alerts DataFrame."""
     new_alert = {
         'Ticker': ticker,
+        'ISIN': ISIN,  # Add ISIN to alerts
         'Condition': condition,
         'Threshold': threshold,
         'Created At': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -267,6 +345,7 @@ def add_alert(ticker, condition, threshold, email):
         st.session_state.alerts_df,
         pd.DataFrame([new_alert])
     ], ignore_index=True)
+
 
 def delete_alert(index):
     """Delete an alert by its index."""
@@ -397,48 +476,54 @@ def show_portfolio():
             )
         st.markdown("---")
 
-    # 1) Add New Transaction
-    st.header("🆕 Add New Transaction")
-    with st.form("Add Transaction Form", clear_on_submit=True):
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        with col1:
-            new_ticker = st.text_input("Ticker Symbol", placeholder="e.g., AAPL", help="Enter the stock ticker symbol.").upper()
-        with col2:
-            new_date = st.date_input("Purchase Date", max_value=date.today(), help="Select the date of purchase.")
-        with col3:
-            new_price = st.number_input("Purchase Price ($)", min_value=0.0, format="%.2f", help="Enter the purchase price per share.")
-        with col4:
-            new_quantity = st.number_input("Quantity", min_value=1, step=1, help="Enter the number of shares purchased.")
-        with col5:
-            label_options = get_unique_labels()
-            new_label = st.selectbox("Label", options=label_options + ["Add New Label"], index=0, help="Assign a label to categorize the transaction.")
-            if new_label == "Add New Label":
-                new_label = st.text_input("Enter New Label", placeholder="e.g., Tech Stocks", help="Enter a new label name.")
-        with col6:
-            new_color = st.color_picker("Row Color", value="#FFFFFF", help="Choose a color to highlight the transaction row.")
-        submitted = st.form_submit_button("➕ Add Transaction")
+        # 1) Add New Transaction
+        st.header("🆕 Add New Transaction")
+        with st.form("Add Transaction Form", clear_on_submit=True):
+            col1, col2, col3, col4, col5, col6, col7 = st.columns(7)  # Adjusted for ISIN
+            with col1:
+                new_ticker = st.text_input("Ticker Symbol", placeholder="e.g., AAPL", help="Enter the stock ticker symbol.").upper()
+            with col2:
+                new_isin = st.text_input("ISIN Symbol", placeholder="e.g., US0378331005", help="Enter the stock ISIN symbol.").upper()
+            with col3:
+                new_date = st.date_input("Purchase Date", max_value=date.today(), help="Select the date of purchase.")
+            with col4:
+                new_price = st.number_input("Purchase Price ($)", min_value=0.0, format="%.2f", help="Enter the purchase price per share.")
+            with col5:
+                new_quantity = st.number_input("Quantity", min_value=1, step=1, help="Enter the number of shares purchased.")
+            with col6:
+                label_options = get_unique_labels()
+                new_label = st.selectbox("Label", options=label_options + ["Add New Label"], index=0, help="Assign a label to categorize the transaction.")
+                if new_label == "Add New Label":
+                    new_label = st.text_input("Enter New Label", placeholder="e.g., Tech Stocks", help="Enter a new label name.")
+            with col7:
+                new_color = st.color_picker("Row Color", value="#FFFFFF", help="Choose a color to highlight the transaction row.")
+            submitted = st.form_submit_button("➕ Add Transaction")
 
-    if submitted:
-        errors = validate_transaction_data(new_ticker, new_price, new_quantity, new_date)
-        if errors:
-            for error in errors:
-                st.error(f"⚠️ {error}")
-        else:
-            if not new_label:
-                new_label = "Unlabeled"
-            new_data = {
-                'Ticker': new_ticker,
-                'Date': new_date,
-                'Buy Price': new_price,
-                'Quantity': new_quantity,
-                'Color': new_color,
-                'Label': new_label
-            }
-            st.session_state.transactions_df = pd.concat([
-                st.session_state.transactions_df,
-                pd.DataFrame([new_data])
-            ], ignore_index=True)
-            st.success(f"✅ Added transaction for **{new_ticker}**!")
+        if submitted:
+            errors = validate_transaction_data(new_ticker, new_price, new_quantity, new_date)
+            if not new_isin:
+                errors.append("ISIN symbol cannot be empty.")
+            if errors:
+                for error in errors:
+                    st.error(f"⚠️ {error}")
+            else:
+                if not new_label:
+                    new_label = "Unlabeled"
+                new_data = {
+                    'Ticker': new_ticker,
+                    'ISIN': new_isin,  # Include ISIN
+                    'Date': new_date,
+                    'Buy Price': new_price,
+                    'Quantity': new_quantity,
+                    'Color': new_color,
+                    'Label': new_label
+                }
+                st.session_state.transactions_df = pd.concat([
+                    st.session_state.transactions_df,
+                    pd.DataFrame([new_data])
+                ], ignore_index=True)
+                st.success(f"✅ Added transaction for **{new_ticker} (ISIN: {new_isin})**!")
+
 
     st.markdown("---")
 
@@ -447,7 +532,9 @@ def show_portfolio():
     if not transactions_df.empty:
         gb_trans = GridOptionsBuilder.from_dataframe(transactions_df)
         gb_trans.configure_default_column(editable=True, resizable=True, sortable=True, filter=True)
-        
+
+        gb_trans.configure_column("ISIN", editable=True, sortable=True, filter=True, header_name="ISIN")
+
         # Add Delete button using custom cell renderer
         delete_button = JsCode("""
         class BtnCellRenderer {
@@ -1023,22 +1110,26 @@ def show_portfolio():
         if updated_df.empty:
             st.info("No data available to set alerts.")
         else:
-            alert_col1, alert_col2, alert_col3, alert_col4 = st.columns(4)
+            alert_col1, alert_col2, alert_col3, alert_col4, alert_col5 = st.columns(5)
             with alert_col1:
                 alert_ticker = st.selectbox("Select Ticker for Alert", options=updated_df['Ticker'].unique().tolist(), key='alert_ticker')
             with alert_col2:
-                alert_condition = st.selectbox("Condition", options=["Above", "Below"], key='alert_condition')
+                selected_isin = updated_df[updated_df['Ticker'] == alert_ticker]['ISIN'].iloc[0] if not updated_df[updated_df['Ticker'] == alert_ticker].empty else ""
+                st.text_input("ISIN for Alert", value=selected_isin, disabled=True, key='alert_isin')  # Display ISIN
             with alert_col3:
-                alert_threshold = st.number_input("Threshold (%)", value=0.0, step=0.1, key='alert_threshold', help="Set the performance threshold for the alert.")
+                alert_condition = st.selectbox("Condition", options=["Above", "Below"], key='alert_condition')
             with alert_col4:
+                alert_threshold = st.number_input("Threshold (%)", value=0.0, step=0.1, key='alert_threshold', help="Set the performance threshold for the alert.")
+            with alert_col5:
                 alert_email = st.text_input("Notification Email", value="", help="Enter the email to receive alert notifications.")
             alert_submit = st.button("🔔 Set Alert")
             if alert_submit:
                 if not alert_email:
                     st.error("Please provide a valid email address for notifications.")
                 else:
-                    add_alert(alert_ticker, alert_condition, alert_threshold, alert_email)
-                    st.success(f"✅ Alert set for **{alert_ticker}**: {alert_condition} {alert_threshold}%")
+                    add_alert(alert_ticker, selected_isin, alert_condition, alert_threshold, alert_email)
+                    st.success(f"✅ Alert set for **{alert_ticker} (ISIN: {selected_isin})**: {alert_condition} {alert_threshold}%")
+
 
     if not alerts_df.empty:
         st.subheader("📋 Current Alerts")

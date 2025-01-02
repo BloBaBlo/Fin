@@ -62,21 +62,31 @@ def annotate_performance_with_points_and_time(ax, hist_data, points):
         bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray')
     )
 
-    for _, point_price, _, _, _ in points:
-        perf_from_buy = (end_price / point_price - 1) * 100
-        ax.axhline(y=point_price, color='red', linestyle='--', alpha=0.7)
-        
-        color = "green" if perf_from_buy > 0 else "red"
-        
-        ax.text(
-            ax.get_xlim()[0],
-            point_price,
-            f"{point_price} : Perf={perf_from_buy:.2f}%",
-            color=color,
-            verticalalignment='center',
-            fontsize=10,
-            bbox=dict(facecolor='white', alpha=0.8, edgecolor=color)
-        )
+    for point in points:
+        try:
+            # Adjust the indices based on your tuple structure
+            date = point[1]
+            point_price = point[2]
+            # If there are more elements, you can ignore them or assign as needed
+        except IndexError:
+            st.warning("Unexpected point format in bought data.")
+            continue
+
+        if pd.notna(point_price) and isinstance(point_price, (int, float)):
+            perf_from_buy = (end_price / point_price - 1) * 100
+            ax.axhline(y=point_price, color='red', linestyle='--', alpha=0.7)
+            
+            color = "green" if perf_from_buy > 0 else "red"
+            
+            ax.text(
+                ax.get_xlim()[0],
+                point_price,
+                f"{point_price} : Perf={perf_from_buy:.2f}%",
+                color=color,
+                verticalalignment='center',
+                fontsize=10,
+                bbox=dict(facecolor='white', alpha=0.8, edgecolor=color)
+            )
 
 def compute_bollinger_bands(hist_data, window=20, num_std=2):
     rolling_mean = hist_data['Close'].rolling(window).mean()
